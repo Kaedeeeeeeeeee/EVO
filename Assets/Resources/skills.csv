@@ -1,0 +1,5 @@
+﻿id,skillName,description,cost,effectType
+1,Fireball,Launch a fireball,20,IncreaseDamage
+2,Dash,Move quickly,15,IncreaseSpeed
+3,Heal,Recover HP,30,Heal
+4,Shield,Reduce damage,25,Shield
