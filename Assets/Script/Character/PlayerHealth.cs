@@ -64,11 +64,22 @@ public class PlayerHealth : MonoBehaviour
         }
     }
 
-
     void Die()
     {
         isAlive = false;
         Debug.Log("玩家死亡！");
         // 这里可以添加游戏结束逻辑
+    }
+
+    // 添加IsDead方法供敌人AI使用
+    public bool IsDead()
+    {
+        return !isAlive || currentHealth <= 0;
+    }
+
+    // 获取当前生命值百分比
+    public float GetHealthPercentage()
+    {
+        return (float)currentHealth / maxHealth;
     }
 }
