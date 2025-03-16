@@ -1190,6 +1190,7 @@ GameObject:
   - component: {fileID: 114424376}
   - component: {fileID: 114424375}
   - component: {fileID: 114424374}
+  - component: {fileID: 114424377}
   m_Layer: 5
   m_Name: EvolutionShop
   m_TagString: Untagged
@@ -1275,6 +1276,24 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 114424372}
   m_CullTransparentMesh: 1
+--- !u!114 &114424377
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 114424372}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0eaabafc912f141ac8c3ad80e3c7b17e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  cardButtons:
+  - {fileID: 2081249590}
+  - {fileID: 649187232}
+  - {fileID: 1227973007}
+  - {fileID: 1051352694}
+  skillActivation: {fileID: 0}
 --- !u!1001 &116386024
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1759,7 +1778,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3d104daa411984beb889e83262d79220, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  evoPointsText: {fileID: 0}
+  evoPointsText: {fileID: 1094879043}
 --- !u!1001 &184074057
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2340,7 +2359,7 @@ GameObject:
   - component: {fileID: 277071340}
   - component: {fileID: 277071339}
   m_Layer: 5
-  m_Name: EvolutionText (1)
+  m_Name: ShopEvoPointsText
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -8263,6 +8282,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   evolutionShopUI: {fileID: 114424372}
+  shopEvoPointsText: {fileID: 277071339}
 --- !u!114 &1179695711
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8275,6 +8295,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0eaabafc912f141ac8c3ad80e3c7b17e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  cardButtons:
+  - {fileID: 2081249590}
+  - {fileID: 649187232}
+  - {fileID: 1227973007}
+  - {fileID: 1051352694}
+  skillActivation: {fileID: 1973469250}
 --- !u!114 &1179695712
 MonoBehaviour:
   m_ObjectHideFlags: 0
