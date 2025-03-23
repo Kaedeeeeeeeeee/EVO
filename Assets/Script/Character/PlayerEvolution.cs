@@ -202,7 +202,7 @@ public class PlayerEvolution : MonoBehaviour
     {
         if (levelText != null)
         {
-            levelText.text = $"等级: {level}";
+            levelText.text = $"Level: {level}";
 
             // 可以根据等级设置不同的颜色
             switch (level)
