@@ -40,6 +40,30 @@ public class EnemySpawner : MonoBehaviour
 
     void Start()
     {
+        // 给敌人生成器添加Temporary标签以便场景切换时正确清理
+        gameObject.tag = "Temporary";
+        
+        // 确保实例在开始前被正确初始化
+        spawnedEnemies = new List<GameObject>();
+        
+        // 确保在地形生成后再生成敌人
+        TerrainGenerator terrain = FindFirstObjectByType<TerrainGenerator>();
+        if (terrain != null)
+        {
+            // 移除旧的监听器避免重复
+            terrain.OnMapGenerationComplete -= StartSpawning;
+            // 添加新的监听器
+            terrain.OnMapGenerationComplete += StartSpawning;
+            
+            Debug.Log("敌人生成器已连接到地形生成器");
+        }
+        else
+        {
+            // 增加更长的延迟，确保其他组件已初始化
+            Debug.LogWarning("未找到TerrainGenerator，延迟启动敌人生成");
+            Invoke("DelayedSpawn", 3f); // 减少延迟时间，但确保在玩家加载后执行
+        }
+
         // 检查必要引用
         if (enemyPrefab == null)
         {
@@ -60,20 +84,93 @@ public class EnemySpawner : MonoBehaviour
             }
         }
 
+        // 延迟初始化player引用
+        StartCoroutine(TryFindPlayer());
+    }
+
+    // 添加一个新的协程来反复尝试查找玩家
+    private IEnumerator TryFindPlayer(int maxAttempts = 10)
+    {
+        int attempts = 0;
+        
+        while (player == null && attempts < maxAttempts)
+        {
+            player = GameObject.FindGameObjectWithTag("Player")?.transform;
+            
+            if (player != null)
+            {
+                Debug.Log("✅ 成功找到Player对象");
+                
+                // 验证设置
+                LogSettings();
+                
+                // 玩家找到后，开始生成敌人
+                if (!IsInvoking("DelayedSpawn"))
+                {
+                    StartCoroutine(SpawnInitialEnemies());
+                }
+                
+                break;
+            }
+            
+            attempts++;
+            Debug.LogWarning($"⚠️ 未找到玩家，尝试 {attempts}/{maxAttempts}");
+            
+            // 等待一段时间再试
+            yield return new WaitForSeconds(1f);
+        }
+        
+        if (player == null)
+        {
+            Debug.LogError("❌ 多次尝试后仍未找到玩家！请检查玩家对象是否具有'Player'标签");
+        }
+    }
+
+    void DelayedSpawn()
+    {
+        Debug.Log("延迟启动敌人生成");
+        
+        // 再次尝试找到玩家
+        if (player == null)
+        {
+            player = GameObject.FindGameObjectWithTag("Player")?.transform;
+            
+            if (player == null)
+            {
+                Debug.LogWarning("DelayedSpawn中仍未找到玩家，再次延迟尝试...");
+                Invoke("DelayedSpawn", 2f); // 如果还是找不到，继续延迟
+                return; // 玩家未找到，先不进行后续操作
+            }
+        }
+        
+        // 强制初始化
+        InitializeMainGroundBounds();
+        
+        // 开始生成
+        StartCoroutine(SpawnInitialEnemies());
+    }
+
+    // 修改StartSpawning方法，确保它会开始生成敌人
+    void StartSpawning()
+    {
+        Debug.Log("收到地形生成完成事件，开始生成敌人...");
+        
+        // 确保有玩家引用
         if (player == null)
         {
             player = GameObject.FindGameObjectWithTag("Player")?.transform;
             if (player == null)
             {
-                Debug.LogError("❌ EnemySpawner: 未找到玩家！");
+                Debug.LogWarning("StartSpawning时未找到玩家，延迟尝试...");
+                Invoke("DelayedSpawn", 1f);
                 return;
             }
         }
-
-        // 验证设置
-        LogSettings();
-
-        // 生成初始敌人
+        
+        // 确保已初始化地形边界
+        InitializeMainGroundBounds();
+        
+        // 开始生成敌人
         StartCoroutine(SpawnInitialEnemies());
     }
 
@@ -353,6 +450,17 @@ public class EnemySpawner : MonoBehaviour
     // 全地图生成位置方法
     private Vector3 GetMapWideSpawnPosition()
     {
+        // 添加安全检查，如果player为null则尝试查找
+        if (player == null)
+        {
+            player = GameObject.FindGameObjectWithTag("Player")?.transform;
+            if (player == null)
+            {
+                Debug.LogError("❌ GetMapWideSpawnPosition: player引用为null，无法计算生成位置");
+                return Vector3.zero;
+            }
+        }
+
         int maxAttempts = spawnAttemptsPerPosition;
         int groundHits = 0;
         int distanceChecks = 0;
@@ -373,12 +481,16 @@ public class EnemySpawner : MonoBehaviour
                 groundHits++;
                 Vector3 validPosition = hitInfo.point + Vector3.up * 0.1f; // 略微抬高，避免嵌入地面
 
-                // 检查与玩家的距离
-                float distanceToPlayer = Vector3.Distance(validPosition, player.position);
-                if (distanceToPlayer < minDistanceFromPlayer)
+                // 安全检查
+                if (player != null)
                 {
-                    distanceChecks++;
-                    continue; // 太靠近玩家，重新尝试
+                    // 检查与玩家的距离
+                    float distanceToPlayer = Vector3.Distance(validPosition, player.position);
+                    if (distanceToPlayer < minDistanceFromPlayer)
+                    {
+                        distanceChecks++;
+                        continue; // 太靠近玩家，重新尝试
+                    }
                 }
 
                 // 检查与其他敌人的距离
@@ -419,6 +531,17 @@ public class EnemySpawner : MonoBehaviour
     // 基于玩家的生成位置方法（原方法）
     private Vector3 GetPlayerBasedSpawnPosition()
     {
+        // 添加安全检查，如果player为null则尝试查找
+        if (player == null)
+        {
+            player = GameObject.FindGameObjectWithTag("Player")?.transform;
+            if (player == null)
+            {
+                Debug.LogError("❌ GetPlayerBasedSpawnPosition: player引用为null，无法计算生成位置");
+                return Vector3.zero;
+            }
+        }
+
         int maxAttempts = spawnAttemptsPerPosition;
         int groundHits = 0;
         int distanceChecks = 0;
@@ -467,7 +590,7 @@ public class EnemySpawner : MonoBehaviour
         }
 
         // 如果实在找不到有效位置，在极端情况下可以忽略距离限制
-        if (spawnedEnemies.Count == 0)
+        if (player != null && spawnedEnemies.Count == 0)
         {
             float angle = Random.Range(0f, 360f);
             float distance = minDistanceFromPlayer * 1.5f;
@@ -560,5 +683,101 @@ public class EnemySpawner : MonoBehaviour
                 Gizmos.DrawWireSphere(player.position, spawnRadius);
             }
         }
+    }
+
+    // 添加一个新方法，用于在每一帧检查并安全清理所有失效引用
+    void LateUpdate()
+    {
+        // 移除所有为null的敌人引用，防止MissingReferenceException
+        for (int i = spawnedEnemies.Count - 1; i >= 0; i--)
+        {
+            if (spawnedEnemies[i] == null)
+            {
+                spawnedEnemies.RemoveAt(i);
+            }
+        }
+        
+        // 如果玩家引用丢失，尝试重新获取
+        if (player == null)
+        {
+            player = GameObject.FindGameObjectWithTag("Player")?.transform;
+            if (player == null)
+            {
+                Debug.LogError("无法找到玩家对象！请确保Player正确设置了Tag");
+            }
+            else
+            {
+                Debug.Log("成功重新查找到Player对象");
+            }
+        }
+    }
+
+    // 添加OnDestroy方法确保正确清理资源和取消事件订阅
+    void OnDestroy()
+    {
+        // 取消对地形生成器的事件订阅
+        TerrainGenerator terrain = FindFirstObjectByType<TerrainGenerator>();
+        if (terrain != null)
+        {
+            terrain.OnMapGenerationComplete -= StartSpawning;
+        }
+        
+        // 停止所有协程
+        StopAllCoroutines();
+        
+        // 销毁所有已生成的敌人，避免引用问题
+        foreach (GameObject enemy in spawnedEnemies)
+        {
+            if (enemy != null)
+            {
+                Destroy(enemy);
+            }
+        }
+        
+        // 清理敌人列表
+        spawnedEnemies.Clear();
+        player = null; // 显式清除对玩家的引用
+    }
+
+    // 添加一个新方法，用于在游戏重启时重新初始化敌人生成器
+    public void ReInitialize()
+    {
+        Debug.Log("重新初始化敌人生成器...");
+        
+        // 清空现有敌人
+        foreach (GameObject enemy in spawnedEnemies)
+        {
+            if (enemy != null)
+            {
+                Destroy(enemy);
+            }
+        }
+        spawnedEnemies.Clear();
+        
+        // 重新连接到TerrainGenerator
+        TerrainGenerator terrain = FindFirstObjectByType<TerrainGenerator>();
+        if (terrain != null)
+        {
+            // 移除旧的监听器
+            terrain.OnMapGenerationComplete -= StartSpawning;
+            // 添加新的监听器
+            terrain.OnMapGenerationComplete += StartSpawning;
+            
+            Debug.Log("敌人生成器重新连接到地形生成器");
+        }
+        else
+        {
+            Debug.LogWarning("ReInitialize时未找到TerrainGenerator");
+        }
+        
+        // 重新查找玩家
+        player = GameObject.FindGameObjectWithTag("Player")?.transform;
+        if (player == null)
+        {
+            Debug.LogWarning("ReInitialize时未找到玩家，稍后将尝试查找");
+        }
+        
+        // 重新初始化MainGround边界
+        InitializeMainGroundBounds();
     }
 }

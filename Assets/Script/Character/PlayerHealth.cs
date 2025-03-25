@@ -2,11 +2,12 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System.Collections;
+using UnityEngine.SceneManagement;
 
 public class PlayerHealth : MonoBehaviour
 {
     public int maxHealth = 100;
-    private int currentHealth;
+    public float currentHealth { get; private set; }
     public Image healthBar;
     public TextMeshProUGUI healthText;
 
@@ -22,9 +23,16 @@ public class PlayerHealth : MonoBehaviour
 
     IEnumerator HealthDecay()
     {
-        while (isAlive)
+        while (isAlive && this != null)
         {
+            if (this == null || !gameObject)
+                yield break;
+            
             yield return new WaitForSeconds(1f);
+            
+            if (this == null || !gameObject)
+                yield break;
+            
             TakeDamage(Mathf.CeilToInt(maxHealth * healthDecayRate));
         }
     }
@@ -67,8 +75,14 @@ public class PlayerHealth : MonoBehaviour
     void Die()
     {
         isAlive = false;
-        Debug.Log("玩家死亡！");
-        // 这里可以添加游戏结束逻辑
+        StopAllCoroutines();
+        
+        // 通知GameManager处理游戏结束
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.GameOver();
+            // 不要在这里直接加载场景
+        }
     }
 
     // 添加IsDead方法供敌人AI使用
@@ -81,5 +95,32 @@ public class PlayerHealth : MonoBehaviour
     public float GetHealthPercentage()
     {
         return (float)currentHealth / maxHealth;
+    }
+
+    // 添加一个公共方法获取当前生命值
+    public float GetCurrentHealth()
+    {
+        return currentHealth;
+    }
+
+    // 添加重置玩家生命值的方法
+    public void ResetHealth()
+    {
+        currentHealth = maxHealth;
+        isAlive = true;
+        UpdateHealthUI();
+        
+        // 重新开始持续扣血
+        StopAllCoroutines();
+        StartCoroutine(HealthDecay());
+        
+        Debug.Log("玩家生命值已重置为最大值: " + maxHealth);
+    }
+
+    private void OnDestroy()
+    {
+        StopAllCoroutines();
+        // 例如，如果您订阅了某个事件：
+        // GameManager.OnGameOver -= HandleGameOver;
     }
 }

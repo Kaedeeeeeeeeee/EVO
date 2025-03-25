@@ -66,12 +66,19 @@ public class PlayerAirSpawner : MonoBehaviour
         Vector3 spawnPosition = new Vector3(landingPosition.x, landingPosition.y + spawnHeight, landingPosition.z);
         player.transform.position = spawnPosition;
         
+        // 确保玩家垂直方向正确 - 使胶囊体站立
+        player.transform.rotation = Quaternion.identity; // 重置旋转为默认值
+        
         // 如果玩家有刚体组件，确保它启用了物理效果
         Rigidbody rb = player.GetComponent<Rigidbody>();
         if (rb != null)
         {
-            rb.velocity = Vector3.zero;
-            rb.isKinematic = false;
+            rb.isKinematic = false; // 先关闭Kinematic状态
+            rb.velocity = Vector3.zero; // 然后再设置速度
+            rb.angularVelocity = Vector3.zero; // 重置角速度，防止旋转
+            
+            // 冻结旋转，只允许上下移动
+            rb.constraints = RigidbodyConstraints.FreezeRotation | RigidbodyConstraints.FreezePositionX | RigidbodyConstraints.FreezePositionZ;
         }
         
         // 生成特效
@@ -127,6 +134,12 @@ public class PlayerAirSpawner : MonoBehaviour
         {
             yield return new WaitForSeconds(0.1f);
             
+            // 添加null检查，避免场景切换时的错误
+            if (player == null || !player.gameObject || this == null)
+            {
+                yield break; // 立即退出协程
+            }
+            
             // 检测玩家是否已经停止下落
             float currentY = player.transform.position.y;
             if (Mathf.Approximately(lastY, currentY))
@@ -142,13 +155,25 @@ public class PlayerAirSpawner : MonoBehaviour
                 stableTime = 0f;
             }
             
+            // 每帧保持玩家垂直
+            player.transform.rotation = Quaternion.identity;
+            
             lastY = currentY;
         }
         
         // 玩家已着陆，播放着陆特效
-        if (addEntryEffect && landingEffectPrefab != null)
+        if (player != null && addEntryEffect && landingEffectPrefab != null)
         {
             Instantiate(landingEffectPrefab, player.transform.position, Quaternion.identity);
+            
+            // 着陆后，修改刚体约束
+            Rigidbody rb = player.GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                // 着陆后，允许玩家水平移动，但仍冻结旋转
+                rb.constraints = RigidbodyConstraints.FreezeRotation;
+                rb.angularVelocity = Vector3.zero; // 再次确保角速度为0
+            }
         }
         
         Debug.Log("玩家已成功着陆！");
@@ -156,9 +181,14 @@ public class PlayerAirSpawner : MonoBehaviour
 
     private void OnDestroy()
     {
+        StopAllCoroutines();
+        
         if (terrainGenerator != null)
         {
             terrainGenerator.OnMapGenerationComplete -= SpawnPlayerFromAir;
         }
+        
+        // 清除引用
+        player = null;
     }
 } 

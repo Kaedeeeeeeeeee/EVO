@@ -9,10 +9,22 @@ public class PlayerMovement : MonoBehaviour
     private CharacterController controller;
     private Vector3 velocity;
     private bool isStunned = false; // **是否处于僵直状态**
+    private Rigidbody rb; // 添加刚体引用
 
     void Start()
     {
         controller = GetComponent<CharacterController>();
+        rb = GetComponent<Rigidbody>();
+        
+        // 如果有刚体组件，确保约束旋转
+        if (rb != null)
+        {
+            rb.constraints = RigidbodyConstraints.FreezeRotation;
+            rb.angularVelocity = Vector3.zero;
+        }
+        
+        // 确保角色初始状态垂直站立
+        transform.rotation = Quaternion.identity;
     }
 
     void Update()
@@ -22,6 +34,23 @@ public class PlayerMovement : MonoBehaviour
             Move();
         }
         ApplyGravity();
+        
+        // 每帧确保角色保持垂直
+        EnsureVerticalOrientation();
+    }
+    
+    // 确保角色保持垂直站立
+    void EnsureVerticalOrientation()
+    {
+        // 只修改旋转的X和Z轴，保留Y轴旋转（允许角色转向）
+        float currentYRotation = transform.eulerAngles.y;
+        transform.rotation = Quaternion.Euler(0, currentYRotation, 0);
+        
+        // 如果有刚体，确保没有角速度
+        if (rb != null)
+        {
+            rb.angularVelocity = Vector3.zero;
+        }
     }
 
     void Move()
@@ -29,6 +58,15 @@ public class PlayerMovement : MonoBehaviour
         float moveX = Input.GetAxis("Horizontal");
         float moveZ = Input.GetAxis("Vertical");
         Vector3 moveDirection = new Vector3(moveX, 0, moveZ).normalized;
+        
+        // 如果有移动输入，根据移动方向设置角色的朝向
+        if (moveDirection.magnitude > 0.1f)
+        {
+            // 使角色面向移动方向
+            float targetAngle = Mathf.Atan2(moveDirection.x, moveDirection.z) * Mathf.Rad2Deg;
+            transform.rotation = Quaternion.Euler(0, targetAngle, 0);
+        }
+        
         controller.Move(moveDirection * moveSpeed * Time.deltaTime);
     }
 

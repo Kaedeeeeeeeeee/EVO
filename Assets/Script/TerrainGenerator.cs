@@ -28,6 +28,9 @@ public class TerrainGenerator : MonoBehaviour
     // 用于存储所有已放置对象的位置
     private List<Vector3> placedObjectPositions = new List<Vector3>();
     
+    // 标记地形是否正在生成中
+    public bool isGenerating = false;
+    
     // 地形边界
     private float terrainMinX;
     private float terrainMaxX;
@@ -53,16 +56,59 @@ public class TerrainGenerator : MonoBehaviour
             Destroy(gameObject);
             return;
         }
+
+        // 添加Temporary标签以便在场景切换时被正确清理
+        gameObject.tag = "Temporary";
     }
 
     private void Start()
     {
-        // 在游戏开始时生成地图
+        Debug.Log("TerrainGenerator启动，准备生成地形...");
+        
+        // 不直接生成，而是延迟一帧确保所有必要组件都已初始化
+        StartCoroutine(DelayedGenerateMap());
+    }
+    
+    private IEnumerator DelayedGenerateMap()
+    {
+        // 等待两帧确保所有组件都已初始化
+        yield return null;
+        yield return null;
+        
+        Debug.Log("开始延迟生成地形...");
+        
+        // 检查是否有其他TerrainGenerator实例正在生成地形
+        TerrainGenerator[] generators = FindObjectsByType<TerrainGenerator>(FindObjectsSortMode.None);
+        foreach (TerrainGenerator gen in generators)
+        {
+            if (gen != this && gen.isGenerating)
+            {
+                Debug.Log("检测到另一个TerrainGenerator正在生成地形，等待...");
+                yield return new WaitForSeconds(0.5f);
+            }
+        }
+        
+        // 确保mainGround引用有效
+        if (mainGround == null)
+        {
+            GameObject mainGroundObj = GameObject.Find("MainGround");
+            if (mainGroundObj == null)
+            {
+                Debug.LogError("未找到MainGround对象，无法生成地形!");
+                yield break;
+            }
+            mainGround = mainGroundObj.transform;
+        }
+        
+        // 现在生成地图
         GenerateMap();
     }
 
     public void GenerateMap()
     {
+        // 设置标记为正在生成
+        isGenerating = true;
+        
         // 清除之前生成的对象
         ClearExistingTerrain();
         
@@ -84,6 +130,9 @@ public class TerrainGenerator : MonoBehaviour
         {
             GenerateFlatTerrain();
         }
+        
+        // 生成完成，设置标记
+        isGenerating = false;
         
         Debug.Log($"地图生成完成: 1个火山, {lakeCount}个湖泊, {flatTerrainCount}个平坦地形区域");
         
@@ -311,6 +360,41 @@ public class TerrainGenerator : MonoBehaviour
     // 可以从外部重新生成地图的公共方法
     public void RegenerateMap()
     {
+        Debug.Log("开始重新生成地形...");
+        
+        // 先清理现有地形
+        ClearExistingTerrain();
+        
+        // 重置地形生成相关变量
+        placedObjectPositions.Clear();
+        isGenerating = false;
+        
+        // 重新生成地图
+        Debug.Log("调用GenerateMap生成新地形");
         GenerateMap();
+        
+        // 确保事件被触发
+        if (OnMapGenerationComplete != null)
+        {
+            Debug.Log("手动触发地图生成完成事件");
+            OnMapGenerationComplete.Invoke();
+        }
+        
+        Debug.Log("地形重新生成完成");
+    }
+
+    void OnDestroy()
+    {
+        // 清理事件引用，防止被销毁后调用事件
+        if (OnMapGenerationComplete != null)
+        {
+            foreach (System.Delegate d in OnMapGenerationComplete.GetInvocationList())
+            {
+                OnMapGenerationComplete -= (System.Action)d;
+            }
+        }
+        
+        // 停止所有协程
+        StopAllCoroutines();
     }
 } 

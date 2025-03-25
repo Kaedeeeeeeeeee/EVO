@@ -1,5 +1,6 @@
 using UnityEngine;
 using TMPro;
+using System;
 
 public class PlayerEvolution : MonoBehaviour
 {
@@ -10,6 +11,7 @@ public class PlayerEvolution : MonoBehaviour
     public int level = 1;               // 玩家等级 (1-5)
     public int[] levelUpThresholds = { 0, 100, 250, 500, 1000 };  // 每个等级所需的进化点数
 
+    // 使用弱引用以防止引用被销毁的对象
     private EvolutionPointsUI pointsUI;
     private EvolutionShopManager shopManager;
 
@@ -22,6 +24,13 @@ public class PlayerEvolution : MonoBehaviour
         {
             Instance = this;
             DontDestroyOnLoad(gameObject);
+            
+            // 确保玩家对象有正确的标签
+            gameObject.tag = "Player";
+            
+            // 添加临时标签会覆盖Player标签，这可能是问题所在
+            // 所以不使用Temporary标签，而是通过其他方式清理
+            // gameObject.tag = "Temporary"; // 这行可能导致Player标签丢失
         }
         else
         {
@@ -32,76 +41,105 @@ public class PlayerEvolution : MonoBehaviour
 
     void Start()
     {
-        // 尝试查找或等待EvolutionPointsUI实例
-        pointsUI = EvolutionPointsUI.Instance;
-
-        if (pointsUI == null)
+        try
         {
-            Debug.LogWarning("⚠️ 未找到EvolutionPointsUI实例，将在首次使用时重新查找");
+            // 尝试查找或等待EvolutionPointsUI实例
+            pointsUI = SafeFindObjectOfType<EvolutionPointsUI>();
+
+            if (pointsUI == null)
+            {
+                Debug.LogWarning("⚠️ 未找到EvolutionPointsUI实例，将在首次使用时重新查找");
+            }
+            else
+            {
+                // 初始化UI显示
+                pointsUI.UpdateEvoPoints(evolutionPoints);
+                Debug.Log($"✅ PlayerEvolution初始化完成，当前EVO-P: {evolutionPoints}，等级: {level}");
+            }
+
+            // 查找商店管理器
+            shopManager = SafeFindObjectOfType<EvolutionShopManager>();
+
+            // 更新等级显示
+            UpdateLevelDisplay();
         }
-        else
+        catch (Exception e)
         {
-            // 初始化UI显示
-            pointsUI.UpdateEvoPoints(evolutionPoints);
-            Debug.Log($"✅ PlayerEvolution初始化完成，当前EVO-P: {evolutionPoints}，等级: {level}");
+            Debug.LogError($"PlayerEvolution启动时发生错误: {e.Message}");
         }
+    }
 
-        // 查找商店管理器
-        shopManager = EvolutionShopManager.Instance;
-
-        // 更新等级显示
-        UpdateLevelDisplay();
+    // 安全地查找对象，避免错误
+    private T SafeFindObjectOfType<T>() where T : MonoBehaviour
+    {
+        try
+        {
+            return FindFirstObjectByType<T>();
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     // 确保在使用前检查并获取UI引用
     private void EnsureUIReference()
     {
-        if (pointsUI == null)
+        try
         {
-            pointsUI = EvolutionPointsUI.Instance;
-
-            // 如果仍然找不到，尝试在场景中查找
             if (pointsUI == null)
             {
-                pointsUI = FindObjectOfType<EvolutionPointsUI>();
+                pointsUI = SafeFindObjectOfType<EvolutionPointsUI>();
 
+                // 如果仍然找不到，尝试在场景中查找
                 if (pointsUI == null)
                 {
                     Debug.LogWarning("⚠️ 无法找到EvolutionPointsUI实例，无法更新UI！");
                 }
             }
-        }
 
-        // 确保有商店管理器引用
-        if (shopManager == null)
+            // 确保有商店管理器引用
+            if (shopManager == null)
+            {
+                shopManager = SafeFindObjectOfType<EvolutionShopManager>();
+            }
+        }
+        catch (Exception e)
         {
-            shopManager = EvolutionShopManager.Instance;
+            Debug.LogError($"获取UI引用时发生错误: {e.Message}");
         }
     }
 
     public void AddEvolutionPoints(int amount)
     {
-        evolutionPoints += amount;
-
-        // 检查是否可以升级
-        CheckForLevelUp();
-
-        // 确保UI引用存在
-        EnsureUIReference();
-
-        // 更新主界面UI
-        if (pointsUI != null)
+        try
         {
-            pointsUI.UpdateEvoPoints(evolutionPoints);
-        }
+            evolutionPoints += amount;
 
-        // 更新商店UI（如果商店已打开）
-        if (shopManager != null)
+            // 检查是否可以升级
+            CheckForLevelUp();
+
+            // 确保UI引用存在
+            EnsureUIReference();
+
+            // 更新主界面UI
+            if (pointsUI != null)
+            {
+                pointsUI.UpdateEvoPoints(evolutionPoints);
+            }
+
+            // 更新商店UI（如果商店已打开）
+            if (shopManager != null)
+            {
+                shopManager.RefreshShopDisplay();
+            }
+
+            Debug.Log($"⚡ EVO-P 增加: {amount}, 当前 EVO-P: {evolutionPoints}, 等级: {level}");
+        }
+        catch (Exception e)
         {
-            shopManager.RefreshShopDisplay();
+            Debug.LogError($"添加进化点数时发生错误: {e.Message}");
         }
-
-        Debug.Log($"⚡ EVO-P 增加: {amount}, 当前 EVO-P: {evolutionPoints}, 等级: {level}");
     }
 
     public bool SpendEvolutionPoints(int amount)
@@ -254,5 +292,45 @@ public class PlayerEvolution : MonoBehaviour
         int levelRange = nextLevelPoints - currentLevelPoints;
 
         return (float)(evolutionPoints - currentLevelPoints) / levelRange;
+    }
+
+    // 新增方法：重置所有进化状态
+    public void ResetEvolutionState()
+    {
+        try
+        {
+            evolutionPoints = 0;  // 重置进化点数
+            level = 1;            // 重置等级为1
+            
+            // 更新UI
+            EnsureUIReference();
+            if (pointsUI != null)
+            {
+                pointsUI.UpdateEvoPoints(evolutionPoints);
+            }
+            
+            // 更新等级显示
+            UpdateLevelDisplay();
+            
+            Debug.Log("已重置玩家进化状态");
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"重置进化状态时发生错误: {e.Message}");
+        }
+    }
+    
+    // 添加OnDestroy方法安全清理引用
+    void OnDestroy()
+    {
+        // 如果销毁的是当前实例，则清空静态引用
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+        
+        // 清除所有引用
+        pointsUI = null;
+        shopManager = null;
     }
 }
