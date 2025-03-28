@@ -266,7 +266,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   healthBarFill: {fileID: 8733711488253017398}
-  levelText: {fileID: 0}
+  levelText: {fileID: 4340224796026259146}
   healthSlider: {fileID: 0}
   showDuration: 3
   fadeSpeed: 3

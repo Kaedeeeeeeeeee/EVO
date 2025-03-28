@@ -2410,6 +2410,14 @@ MonoBehaviour:
   alertDuration: 3
   eatingDuration: 5
   hungerDecreaseRate: 0.1
+  maxStamina: 15
+  currentStamina: 0
+  staminaDecreaseRate: 2
+  staminaRecoveryRate: 1
+  staminaRecoveryDelay: 1
+  canRun: 1
+  restTime: 5
+  isResting: 0
   collisionCheckRadius: 1
   pushForce: 5
   terrainLayerMask:
@@ -2418,6 +2426,7 @@ MonoBehaviour:
   useRigidbody: 1
   showVisionRange: 1
   showAttackRange: 1
+  debugStamina: 1
 --- !u!54 &183043223
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -13900,6 +13909,10 @@ MonoBehaviour:
     huntThreshold: 30
     enemyMaterial: {fileID: 0}
     spawnWeight: 40
+    maxStamina: 100
+    staminaDecreaseRate: 1
+    staminaRecoveryRate: 2
+    staminaRecoveryDelay: 1
     corpseHealAmount: 20
     corpseEvoPoints: 10
   - enemyName: "\u666E\u901A\u730E\u624B"
@@ -13913,6 +13926,10 @@ MonoBehaviour:
     huntThreshold: 40
     enemyMaterial: {fileID: 0}
     spawnWeight: 30
+    maxStamina: 10
+    staminaDecreaseRate: 1
+    staminaRecoveryRate: 2
+    staminaRecoveryDelay: 1
     corpseHealAmount: 20
     corpseEvoPoints: 10
   - enemyName: "\u5F3A\u608D\u730E\u98DF\u8005"
@@ -13926,6 +13943,10 @@ MonoBehaviour:
     huntThreshold: 35
     enemyMaterial: {fileID: 0}
     spawnWeight: 15
+    maxStamina: 10
+    staminaDecreaseRate: 1
+    staminaRecoveryRate: 2
+    staminaRecoveryDelay: 1
     corpseHealAmount: 20
     corpseEvoPoints: 10
   - enemyName: "\u9876\u7EA7\u63A0\u98DF\u8005"
@@ -13939,6 +13960,10 @@ MonoBehaviour:
     huntThreshold: 30
     enemyMaterial: {fileID: 0}
     spawnWeight: 10
+    maxStamina: 10
+    staminaDecreaseRate: 1
+    staminaRecoveryRate: 2
+    staminaRecoveryDelay: 1
     corpseHealAmount: 20
     corpseEvoPoints: 10
   - enemyName: "\u730E\u98DF\u4E4B\u738B"
@@ -13952,6 +13977,10 @@ MonoBehaviour:
     huntThreshold: 25
     enemyMaterial: {fileID: 0}
     spawnWeight: 5
+    maxStamina: 10
+    staminaDecreaseRate: 1
+    staminaRecoveryRate: 2
+    staminaRecoveryDelay: 1
     corpseHealAmount: 20
     corpseEvoPoints: 10
   maxEnemies: 100

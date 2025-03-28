@@ -829,12 +829,13 @@ public class EnemySpawner : MonoBehaviour
             enemyAI.attackDamage = enemyData.attackDamage;
             enemyAI.huntThreshold = enemyData.huntThreshold;
             
-            // 设置新的体力系统参数
+            // 设置体力系统参数
             enemyAI.maxStamina = enemyData.maxStamina;
-            enemyAI.staminaDecreaseRate = enemyData.staminaDecreaseRate;
-            enemyAI.staminaRecoveryRate = enemyData.staminaRecoveryRate;
-            enemyAI.staminaRecoveryDelay = enemyData.staminaRecoveryDelay;
-            enemyAI.canRun = true;
+            enemyAI.restTime = enemyData.restTime;
+            enemyAI.staminaDecreaseRate = 5.0f + (enemyData.level - 1) * 0.5f; // 显著提高消耗速率
+            enemyAI.staminaRecoveryRate = 1.0f;
+            enemyAI.lowStaminaThreshold = 0.2f; // 低体力阈值20%
+            enemyAI.highStaminaThreshold = 0.5f; // 高体力阈值50%
 
             // 初始化敌人
             enemyAI.InitializeEnemy();

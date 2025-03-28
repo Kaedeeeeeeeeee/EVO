@@ -92,4 +92,16 @@ public class PlayerMovement : MonoBehaviour
         yield return new WaitForSeconds(duration);
         isStunned = false;
     }
+    
+    // 添加取消眩晕的方法
+    public void CancelStun()
+    {
+        // 停止所有协程，防止多个眩晕协程同时运行
+        StopAllCoroutines();
+        
+        // 立即解除眩晕状态
+        isStunned = false;
+        
+        Debug.Log("玩家眩晕状态已取消");
+    }
 }

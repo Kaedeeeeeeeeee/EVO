@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections;
 using UnityEngine.AI;
+using UnityEngine.UI; // 添加UI命名空间
 
 // 表示敌人死亡后留下的尸体，可以被玩家或其他敌人收集
 public class DeadEnemy : MonoBehaviour
@@ -15,6 +16,25 @@ public class DeadEnemy : MonoBehaviour
     public bool isFading = false;       // 是否正在消失
     public float fadeTime = 2.0f;       // 消失时间
     public float disappearTime = 60.0f; // 尸体自动消失时间
+
+    [Header("进食系统")]
+    public float consumeDuration = 5.0f;  // 完全吃掉尸体需要的时间
+    public float currentConsumeProgress = 0f;   // 当前进食进度 (0-1)
+    public bool isBeingConsumed = false;      // 是否正在被吃
+    
+    // 资源控制
+    private float lastResourceTime = 0f;      // 上次提供资源的时间
+    private float resourceInterval = 0.5f;    // 资源提供的时间间隔（秒）
+    private float totalHealProvided = 0f;     // 已经提供的总治疗量
+    private float totalEvoProvided = 0f;      // 已经提供的总进化点数
+    private float targetHealAmount = 0f;      // 目标治疗总量
+    private float targetEvoAmount = 0f;       // 目标进化点总量
+    
+    [Header("进度条")]
+    public GameObject progressBarPrefab;    // 进度条预制体
+    private GameObject progressBarInstance; // 进度条实例
+    private Image progressFillImage;        // 进度条填充图像
+    private float lastConsumptionTime;      // 上次进食时间
     
     // 视觉效果参数
     private float initialOpacity = 1.0f;
@@ -40,6 +60,70 @@ public class DeadEnemy : MonoBehaviour
         {
             StartCoroutine(AutoDisappear());
         }
+        
+        // 初始化进度条但不显示
+        CreateProgressBar();
+    }
+    
+    // 创建进度条
+    private void CreateProgressBar()
+    {
+        // 如果已有进度条实例，先销毁
+        if (progressBarInstance != null)
+        {
+            Destroy(progressBarInstance);
+        }
+        
+        // 创建一个简单的平面作为进度条
+        GameObject progressObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        progressObj.name = "EatingProgressBar";
+        
+        // 设置位置和大小 - 尺寸扩大一倍
+        progressObj.transform.SetParent(transform);
+        progressObj.transform.localPosition = new Vector3(0, 2.0f, 0); // 位于尸体上方2单位
+        progressObj.transform.localScale = new Vector3(2.0f, 0.2f, 0.1f); // 长方形进度条，尺寸扩大一倍
+        
+        // 去掉碰撞器
+        Destroy(progressObj.GetComponent<Collider>());
+        
+        // 获取渲染器并设置为红色
+        Renderer renderer = progressObj.GetComponent<Renderer>();
+        if (renderer != null)
+        {
+            renderer.material = new Material(Shader.Find("Standard"));
+            renderer.material.color = Color.red;
+            renderer.receiveShadows = false;
+        }
+        
+        // 保存引用
+        progressBarInstance = progressObj;
+        progressFillImage = null; // 不使用Image组件，而是直接调整Scale
+        
+        // 隐藏进度条
+        progressBarInstance.SetActive(false);
+        
+        Debug.Log("创建了简化版进度条，尺寸扩大一倍");
+    }
+    
+    // 更新进度条显示
+    private void UpdateProgressBar(float progress)
+    {
+        if (progressBarInstance == null) return;
+        
+        // 计算剩余比例 (1.0 - progress)
+        float remaining = 1.0f - progress;
+        
+        // 更新进度条的缩放
+        Vector3 scale = progressBarInstance.transform.localScale;
+        scale.x = remaining * 2.0f; // 只改变X轴缩放，保持扩大一倍的尺寸
+        progressBarInstance.transform.localScale = scale;
+        
+        // 更新颜色 (从红色渐变到黑色)
+        Renderer renderer = progressBarInstance.GetComponent<Renderer>();
+        if (renderer != null && renderer.material != null)
+        {
+            renderer.material.color = Color.Lerp(Color.black, Color.red, remaining);
+        }
     }
     
     // 确保尸体有血池效果
@@ -57,50 +141,78 @@ public class DeadEnemy : MonoBehaviour
     // 创建血池效果 - 简化版
     private void CreateBloodPool()
     {
-        GameObject bloodPool = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        bloodPool.name = "BloodPool";
-        bloodPool.transform.SetParent(transform);
-        bloodPool.transform.localPosition = new Vector3(0, -0.05f, 0); // 略微下沉到地面
-        
-        // 确保血池平躺在地面上
-        bloodPool.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-        
-        bloodPool.transform.localScale = new Vector3(1.5f, 0.02f, 1.5f); // 扁平的圆柱体
-        
-        // 移除碰撞体，只保留视觉效果
-        Destroy(bloodPool.GetComponent<Collider>());
-        
-        // 设置血池材质
-        Renderer bloodRenderer = bloodPool.GetComponent<Renderer>();
-        if (bloodRenderer != null)
-        {
-            // 简化：直接修改材质颜色，不创建新材质
-            bloodRenderer.material.color = new Color(0.5f, 0.0f, 0.0f, 0.8f); // 深红色，半透明
-            bloodRenderer.receiveShadows = false;
-            bloodRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        }
-        
-        Debug.Log("为尸体创建了血池效果");
+        // 使用GameObject.CreatePrimitive创建简单形状作为血池
+        CreateSimpleBloodPool(this.gameObject);
     }
     
-    // 缓存所有渲染器
+    // 缓存渲染器组件
     private void CacheRenderers()
     {
-        cachedRenderers = new System.Collections.Generic.HashSet<Renderer>();
-        Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
-        
-        foreach (Renderer renderer in renderers)
+        if (cachedRenderers == null)
         {
-            if (renderer != null && !renderer.gameObject.name.Contains("Blood"))
+            cachedRenderers = new System.Collections.Generic.HashSet<Renderer>();
+            
+            // 获取当前对象及其所有子对象上的渲染器
+            Renderer[] renderers = GetComponentsInChildren<Renderer>();
+            foreach (Renderer renderer in renderers)
             {
                 cachedRenderers.Add(renderer);
             }
         }
-        
-        Debug.Log($"已缓存 {cachedRenderers.Count} 个渲染器组件");
     }
     
-    // 当玩家进入触发器范围时
+    // 处理淡出效果
+    private IEnumerator FadeOut()
+    {
+        if (isFading) yield break;
+        
+        isFading = true;
+        float startTime = Time.time;
+        
+        // 隐藏进度条
+        if (progressBarInstance != null)
+        {
+            progressBarInstance.SetActive(false);
+        }
+        
+        // 如果尚未缓存渲染器，现在缓存
+        if (cachedRenderers == null || cachedRenderers.Count == 0)
+        {
+            CacheRenderers();
+        }
+        
+        // 记录初始材质的透明度值
+        foreach (Renderer renderer in cachedRenderers)
+        {
+            if (renderer == null) continue;
+            
+            Material mat = renderer.material;
+            Color color = mat.color;
+            initialOpacity = color.a;
+        }
+        
+        // 随时间渐变透明度
+        while (Time.time - startTime < fadeTime)
+        {
+            float t = (Time.time - startTime) / fadeTime;
+            
+            foreach (Renderer renderer in cachedRenderers)
+            {
+                if (renderer == null) continue;
+                
+                Material mat = renderer.material;
+                Color color = mat.color;
+                color.a = Mathf.Lerp(initialOpacity, 0, t);
+                mat.color = color;
+            }
+            
+            yield return null;
+        }
+        
+        // 完全透明后销毁
+        Destroy(gameObject);
+    }
+    
     void OnTriggerEnter(Collider other)
     {
         if (isFading) return;
@@ -124,7 +236,18 @@ public class DeadEnemy : MonoBehaviour
         if (playerHealth != null)
         {
             isCollectable = false;
-            Debug.Log("玩家离开了尸体收集范围");
+            isBeingConsumed = false;
+            
+            // 不再隐藏进度条，让玩家看到进食进度保留
+            // 只在玩家离开时取消眩晕状态
+            GameObject player = other.gameObject;
+            PlayerMovement playerMovement = player?.GetComponent<PlayerMovement>();
+            if (playerMovement != null)
+            {
+                playerMovement.CancelStun();
+            }
+            
+            Debug.Log("玩家离开了尸体收集范围，进度条保持显示");
         }
     }
     
@@ -135,49 +258,6 @@ public class DeadEnemy : MonoBehaviour
         
         Debug.Log($"尸体被消费：Lv{level}，治疗量={healAmount}，进化点数={evoPoints}");
         StartCoroutine(FadeOut());
-    }
-    
-    // 淡出效果
-    private IEnumerator FadeOut()
-    {
-        isFading = true;
-        isCollectable = false;
-        float elapsedTime = 0;
-        
-        // 确保在淡出前已缓存渲染器
-        if (cachedRenderers == null || cachedRenderers.Count == 0)
-        {
-            CacheRenderers();
-        }
-        
-        // 动态淡出逻辑
-        while (elapsedTime < fadeTime)
-        {
-            float alpha = 1.0f - (elapsedTime / fadeTime);
-            
-            // 使用预缓存的渲染器列表
-            foreach (Renderer renderer in cachedRenderers)
-            {
-                if (renderer == null) continue;
-                
-                Material[] mats = renderer.materials;
-                for (int i = 0; i < mats.Length; i++)
-                {
-                    if (mats[i] == null) continue;
-                    
-                    Color color = mats[i].color;
-                    mats[i].color = new Color(color.r, color.g, color.b, color.a * alpha);
-                }
-                renderer.materials = mats;
-            }
-            
-            elapsedTime += Time.deltaTime;
-            yield return null;
-        }
-        
-        // 淡出完成后销毁物体
-        Debug.Log("尸体已完全消失");
-        Destroy(gameObject);
     }
     
     // 尸体自动消失
@@ -296,58 +376,10 @@ public class DeadEnemy : MonoBehaviour
     
     void OnDestroy()
     {
-        Debug.Log($"DeadEnemy.OnDestroy: 尸体被销毁 ID={GetInstanceID()}, 名称={gameObject.name}");
+        Debug.Log("DeadEnemy.OnDestroy: 尸体被销毁");
     }
 
-    // 用于调试的静态方法，方便直接创建测试尸体
-    public static DeadEnemy CreateTestCorpse(Vector3 position, int level, int healAmount, int evoPoints)
-    {
-        Debug.Log($"正在创建测试尸体：Lv{level}，位置={position}");
-        
-        // 创建尸体对象
-        GameObject corpseObj = new GameObject($"TestCorpse_Lv{level}");
-        corpseObj.transform.position = position;
-        corpseObj.transform.rotation = Quaternion.Euler(90f, 0f, 0f); // 横躺
-        corpseObj.layer = LayerMask.NameToLayer("Enemy");
-        
-        // 添加碰撞器
-        SphereCollider col = corpseObj.AddComponent<SphereCollider>();
-        col.isTrigger = true;
-        col.radius = 1.5f;
-        
-        // 添加简单视觉元素 - 横躺的胶囊体
-        GameObject visual = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-        visual.transform.SetParent(corpseObj.transform);
-        visual.transform.localPosition = Vector3.zero;
-        visual.transform.localRotation = Quaternion.Euler(0, 0, 90); // 横躺
-        visual.transform.localScale = new Vector3(1f, 0.5f, 1f);
-        
-        // 移除碰撞体
-        Destroy(visual.GetComponent<Collider>());
-        
-        // 设置简单的灰色材质
-        Renderer visualRenderer = visual.GetComponent<Renderer>();
-        if (visualRenderer != null)
-        {
-            visualRenderer.material.color = new Color(0.4f, 0.4f, 0.4f, 1f);
-        }
-        
-        // 添加血池
-        AddBloodPoolStatic(corpseObj);
-        
-        // 添加DeadEnemy组件
-        DeadEnemy deadEnemy = corpseObj.AddComponent<DeadEnemy>();
-        deadEnemy.level = level;
-        deadEnemy.healAmount = healAmount;
-        deadEnemy.evoPoints = evoPoints;
-        
-        Debug.Log($"测试尸体创建成功: {corpseObj.name}");
-        
-        return deadEnemy;
-    }
-    
-    // 静态方法添加血池
-    private static void AddBloodPoolStatic(GameObject target)
+    private void CreateSimpleBloodPool(GameObject target)
     {
         GameObject bloodPool = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         bloodPool.name = "BloodPool";
@@ -371,15 +403,163 @@ public class DeadEnemy : MonoBehaviour
 
     void Update()
     {
-        // 玩家按J键可以食用尸体
-        if (isCollectable && Input.GetKeyDown(KeyCode.J))
+        // 处理持续按J键进食系统
+        if (isCollectable && Input.GetKey(KeyCode.J))
         {
-            Debug.Log("玩家按下J键，开始进食尸体");
-            PlayerConsumeDead();
+            // 开始/继续进食
+            if (!isBeingConsumed)
+            {
+                StartConsumption();
+            }
+            
+            // 增加进食进度
+            ContinueConsumption();
+        }
+        else if (isBeingConsumed)
+        {
+            // 玩家停止按J键，暂停进食
+            StopConsumption();
+        }
+        
+        // 确保进度条始终朝向相机，无论是否激活
+        if (progressBarInstance != null)
+        {
+            progressBarInstance.transform.LookAt(Camera.main.transform.position);
+        }
+    }
+    
+    // 开始进食
+    private void StartConsumption()
+    {
+        isBeingConsumed = true;
+        lastConsumptionTime = Time.time;
+        lastResourceTime = Time.time;
+        
+        // 重置资源控制变量
+        totalHealProvided = 0f;
+        totalEvoProvided = 0f;
+        targetHealAmount = healAmount;
+        targetEvoAmount = evoPoints;
+        
+        // 显示进度条
+        if (progressBarInstance != null)
+        {
+            progressBarInstance.SetActive(true);
+        }
+        
+        // 使玩家静止
+        GameObject player = FindObjectOfType<PlayerHealth>()?.gameObject;
+        PlayerMovement playerMovement = player?.GetComponent<PlayerMovement>();
+        if (playerMovement != null)
+        {
+            playerMovement.Stun(consumeDuration); // 使用尸体总进食时间作为眩晕时间
+            Debug.Log("玩家开始进食，暂时无法移动");
+        }
+        
+        Debug.Log($"玩家开始进食尸体 Lv{level}，总治疗量上限={targetHealAmount}，总进化点上限={targetEvoAmount}");
+    }
+    
+    // 继续进食
+    private void ContinueConsumption()
+    {
+        // 计算增加的进度
+        float deltaTime = Time.time - lastConsumptionTime;
+        float progressIncrement = deltaTime / consumeDuration;
+        
+        // 更新进度
+        currentConsumeProgress += progressIncrement;
+        currentConsumeProgress = Mathf.Clamp01(currentConsumeProgress); // 确保不超过1
+        lastConsumptionTime = Time.time;
+        
+        // 更新进度条显示
+        UpdateProgressBar(currentConsumeProgress);
+        
+        // 按照固定时间间隔提供资源，而不是每帧都提供
+        if (Time.time - lastResourceTime >= resourceInterval)
+        {
+            ProvideResourcesBasedOnProgress();
+            lastResourceTime = Time.time;
+        }
+        
+        // 检查是否完成
+        if (currentConsumeProgress >= 1.0f)
+        {
+            CompleteConsumption();
+        }
+    }
+    
+    // 停止进食
+    private void StopConsumption()
+    {
+        isBeingConsumed = false;
+        
+        // 不再隐藏进度条，让它一直显示
+        // 进度条会显示当前进食进度，方便玩家下次继续
+        
+        // 恢复玩家移动能力
+        GameObject player = FindObjectOfType<PlayerHealth>()?.gameObject;
+        PlayerMovement playerMovement = player?.GetComponent<PlayerMovement>();
+        if (playerMovement != null)
+        {
+            playerMovement.CancelStun(); // 添加此方法到PlayerMovement脚本
+            Debug.Log("玩家中断进食，恢复移动能力");
+        }
+        
+        Debug.Log($"玩家暂停进食尸体，当前进度: {currentConsumeProgress * 100:F1}%，进度条保持显示");
+    }
+    
+    // 完成进食
+    private void CompleteConsumption()
+    {
+        Debug.Log("玩家完成进食尸体");
+        
+        // 恢复玩家移动能力
+        GameObject player = FindObjectOfType<PlayerHealth>()?.gameObject;
+        PlayerMovement playerMovement = player?.GetComponent<PlayerMovement>();
+        if (playerMovement != null)
+        {
+            playerMovement.CancelStun();
+            Debug.Log("玩家完成进食，恢复移动能力");
+        }
+        
+        // 完全消费尸体
+        StartCoroutine(FadeOut());
+    }
+    
+    // 根据进度提供资源（生命值和进化点数）
+    private void ProvideResourcesBasedOnProgress()
+    {
+        // 找到玩家
+        GameObject player = FindObjectOfType<PlayerHealth>()?.gameObject;
+        PlayerHealth playerHealth = player?.GetComponent<PlayerHealth>();
+        PlayerEvolution playerEvolution = player?.GetComponent<PlayerEvolution>();
+        
+        // 根据当前进度计算应提供的资源总量
+        float progressRatio = currentConsumeProgress;
+        float targetHealSoFar = targetHealAmount * progressRatio;
+        float targetEvoSoFar = targetEvoAmount * progressRatio;
+        
+        // 计算本次应该提供的增量资源
+        int healToProvide = Mathf.CeilToInt(targetHealSoFar - totalHealProvided);
+        int evoToProvide = Mathf.CeilToInt(targetEvoSoFar - totalEvoProvided);
+        
+        // 提供资源（只提供正增量）
+        if (playerHealth != null && healToProvide > 0)
+        {
+            playerHealth.Heal(healToProvide);
+            totalHealProvided += healToProvide;
+            Debug.Log($"玩家获得 {healToProvide} 生命值，进度 {(progressRatio*100):F1}%，累计已获得 {totalHealProvided}/{targetHealAmount}");
+        }
+        
+        if (playerEvolution != null && evoToProvide > 0)
+        {
+            playerEvolution.AddEvolutionPoints(evoToProvide);
+            totalEvoProvided += evoToProvide;
+            Debug.Log($"玩家获得 {evoToProvide} 进化点数，进度 {(progressRatio*100):F1}%，累计已获得 {totalEvoProvided}/{targetEvoAmount}");
         }
     }
 
-    // 玩家食用尸体
+    // 玩家食用尸体 - 原来的方法，保留但不再使用
     void PlayerConsumeDead()
     {
         Debug.Log("PlayerConsumeDead: 开始处理玩家进食逻辑");

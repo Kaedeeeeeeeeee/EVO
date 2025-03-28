@@ -129,7 +129,7 @@ public class CorpseDebugger : MonoBehaviour
         catch (System.Exception e)
         {
             Debug.LogError($"复制敌人失败: {e.Message}\n{e.StackTrace}");
-            CreateTestCorpse(); // 使用CreateTestCorpse替代CreateSimpleCorpse
+            CreateSimpleCorpse(); // 使用CreateSimpleCorpse替代CreateTestCorpse
         }
     }
     
@@ -348,16 +348,9 @@ public class CorpseDebugger : MonoBehaviour
     // 创建标准测试尸体
     private void CreateTestCorpse()
     {
-        Vector3 spawnPosition = GetSpawnPosition();
-        
-        DeadEnemy testCorpse = DeadEnemy.CreateTestCorpse(
-            spawnPosition, 
-            corpseLevel, 
-            healAmount, 
-            evoPoints
-        );
-        
-        Debug.Log($"已通过调试器生成测试尸体: Lv{corpseLevel}，位置={spawnPosition}");
+        // 直接调用本地方法创建简单尸体
+        CreateSimpleCorpse();
+        Debug.Log($"已通过调试器生成测试尸体: Lv{corpseLevel}");
     }
 
     // 创建简单的尸体

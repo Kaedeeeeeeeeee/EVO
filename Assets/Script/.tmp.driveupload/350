@@ -26,15 +26,18 @@ public class EnemyAIExtended : MonoBehaviour
     
     // 体力系统参数
     [Header("体力系统")]
-    public float maxStamina = 100f;           // 最大体力值
-    public float currentStamina;              // 当前体力值
-    public float staminaDecreaseRate = 1f;    // 每0.1秒减少的体力值
-    public float staminaRecoveryRate = 2f;    // 每0.1秒恢复的体力值
-    public float staminaRecoveryDelay = 1.0f; // 恢复体力前的延迟时间（秒）
-    private float lastRunTime = 0f;           // 上次奔跑时间
-    public bool canRun = true;                // 是否可以奔跑
+    public float maxStamina = 15f;           // 最大体力值
+    public float currentStamina;             // 当前体力值
     public float restTime = 5f;              // 休息时间（秒）
     public bool isResting = false;           // 是否正在休息
+    public float staminaDecreaseRate = 2.0f; // 体力消耗速率（每秒）
+    public float staminaRecoveryRate = 1.0f; // 体力恢复速率（每秒）
+    
+    // 体力阈值
+    [Range(0.1f, 0.9f)]
+    public float lowStaminaThreshold = 0.2f;  // 低体力阈值（百分比）
+    [Range(0.1f, 0.9f)]
+    public float highStaminaThreshold = 0.5f; // 高体力阈值（百分比）
     
     // 新增：物理碰撞参数
     public float collisionCheckRadius = 1.0f;  // 碰撞检测半径
@@ -172,21 +175,31 @@ public class EnemyAIExtended : MonoBehaviour
         if (!IsAgentValid())
             return;
         
-        // 记录当前位置以供调试
-        Vector3 oldPosition = transform.position;
+        // 临时提高高度尝试解脱
+        transform.position += Vector3.up * 0.5f;
         
-        // 停止当前导航
+        // 重新计算路径
+        NavMeshPath path = new NavMeshPath();
+        Vector3 randomDirection = UnityEngine.Random.insideUnitSphere;
+        randomDirection.y = 0;
+        randomDirection.Normalize();
+        
+        Vector3 targetPosition = transform.position + randomDirection * 5f;
+        NavMeshHit hit;
+        
+        if (NavMesh.SamplePosition(targetPosition, out hit, 5f, NavMesh.AllAreas))
+        {
+            agent.SetDestination(hit.position);
+            Debug.Log("敌人卡住，尝试重新寻路");
+        }
+        
+        // 重置导航代理
         agent.ResetPath();
         agent.velocity = Vector3.zero;
-        agent.isStopped = true;
         
-        // 等待一帧后重新启动导航
-        StartCoroutine(DelayedNavigationRestart());
-        
-        // 如果当前在追击或逃跑状态但卡住了，切换到游荡状态
-        if (currentState == EnemyState.Hunting || currentState == EnemyState.Fleeing)
+        // 如果当前在追击状态但卡住了，可以考虑切换到游荡状态
+        if (currentState == EnemyState.Hunting)
         {
-            Debug.Log($"敌人Lv{level}在{currentState}状态下卡住，切换到游荡状态");
             TransitionToState(EnemyState.Wandering);
         }
         
@@ -194,46 +207,6 @@ public class EnemyAIExtended : MonoBehaviour
         EnsureAgentOnNavMesh();
     }
     
-    // 添加延迟重启导航的协程
-    private IEnumerator DelayedNavigationRestart()
-    {
-        // 等待一帧
-        yield return null;
-        
-        if (!IsAgentValid()) yield break;
-        
-        // 重新启动导航代理
-        agent.isStopped = false;
-        
-        // 找一个新的随机目标点
-        Vector3 randomDirection = UnityEngine.Random.insideUnitSphere;
-        randomDirection.y = 0;
-        randomDirection.Normalize();
-        
-        Vector3 targetPosition = transform.position + randomDirection * 8f;
-        NavMeshHit hit;
-        
-        // 寻找可达的导航点
-        if (NavMesh.SamplePosition(targetPosition, out hit, 8f, NavMesh.AllAreas))
-        {
-            agent.SetDestination(hit.position);
-            Debug.Log($"敌人Lv{level}卡住后找到新目标点，距离:{Vector3.Distance(transform.position, hit.position):F1}m");
-        }
-        else
-        {
-            // 如果找不到远处的点，尝试找一个近处的点
-            if (NavMesh.SamplePosition(transform.position + randomDirection * 3f, out hit, 3f, NavMesh.AllAreas))
-            {
-                agent.SetDestination(hit.position);
-                Debug.Log($"敌人Lv{level}卡住后找到附近目标点，距离:{Vector3.Distance(transform.position, hit.position):F1}m");
-            }
-            else
-            {
-                Debug.LogWarning($"敌人Lv{level}无法找到有效的导航点，可能严重卡住");
-            }
-        }
-    }
-
     void Awake()
     {
         // 初始化卡住检测
@@ -586,20 +559,22 @@ public class EnemyAIExtended : MonoBehaviour
         agent.avoidancePriority = 50;
         agent.autoTraverseOffMeshLink = true;
         
-        // 设置进阶导航参数
+        // 新增：设置进阶导航参数
         agent.acceleration = 12f; // 加速度
         agent.angularSpeed = 360f; // 转向速度
         agent.areaMask = NavMesh.AllAreas; // 可行走区域
         
         // 初始化体力系统
         currentStamina = maxStamina;
-        canRun = true;
-        lastRunTime = 0f;
+        isResting = false;
+        
+        // 设置体力消耗倍数（根据等级调整）
+        staminaDecreaseRate = 2.0f + (level - 1) * 0.2f; // 等级越高，体力消耗越快
         
         // 记录初始化信息
-        Debug.Log($"🔋 敌人Lv{level}初始化体力系统：最大体力={maxStamina}，消耗速率={staminaDecreaseRate}/0.1s，恢复速率={staminaRecoveryRate}/0.1s，恢复延迟={staminaRecoveryDelay}s");
+        Debug.Log($"🔋 敌人Lv{level}初始化体力系统：最大体力={maxStamina}秒，休息时间={restTime}秒，消耗速率={staminaDecreaseRate:F1}");
         
-        // 初始化物理组件
+        // 新增：初始化物理组件
         InitializePhysicsComponents();
     }
 
@@ -626,9 +601,6 @@ public class EnemyAIExtended : MonoBehaviour
 
             // 首先监控体力状态 - 确保这在任何状态处理之前
             MonitorStamina();
-            
-            // 强制应用体力系统的速度限制 - 这很重要，确保每一帧都考虑体力状态
-            SetSpeedBasedOnStamina();
 
             // 根据当前状态执行行为
             switch (currentState)
@@ -666,16 +638,16 @@ public class EnemyAIExtended : MonoBehaviour
                     break;
             }
             
-            // 再次确保速度设置正确 - 因为各种状态处理方法可能会修改速度
-            SetSpeedBasedOnStamina();
+            // 再次检查体力，确保在每次状态处理后速度设置正确
+            EnforceStaminaRestrictions();
             
             // 增加：每5秒输出一次当前状态汇总
-            if (debugStamina && Time.frameCount % 300 == 0)
+            if (Time.frameCount % 300 == 0)
             {
                 // 计算体力百分比
                 float staminaPercentage = (maxStamina > 0) ? (currentStamina / maxStamina) : 0;
                 
-                Debug.Log($"📊 [{Time.frameCount}] 敌人Lv{level}状态汇总 - " +
+                Debug.Log($"📊 敌人Lv{level}状态汇总 - " +
                           $"状态:{currentState}, " +
                           $"体力:{currentStamina:F1}/{maxStamina} ({staminaPercentage*100:F0}%), " +
                           $"休息:{isResting}, " +
@@ -725,18 +697,22 @@ public class EnemyAIExtended : MonoBehaviour
         }
         
         // 添加体力状态
-        float staminaPercentage = (currentStamina / maxStamina) * 100f;
-        if (!canRun) 
+        float staminaPercentage = (maxStamina > 0) ? (currentStamina / maxStamina * 100) : 0;
+        if (currentState == EnemyState.Resting)
         {
-            statusText += $" [恢复中:{staminaPercentage:F0}%]";
+            statusText += $" [休息中:{restTime - (Time.time - lastStateChangeTime):F1}s]";
         }
         else if (staminaPercentage <= 20)
         {
-            statusText += $" [体力低:{staminaPercentage:F0}%]";
+            statusText += $" [体力不足:{staminaPercentage:F0}%]";
         }
         else if (currentState == EnemyState.Hunting || currentState == EnemyState.Fleeing)
         {
-            // 在奔跑状态下显示体力
+            // 在奔跑状态下显示累积奔跑时间和体力
+            statusText += $" [体力:{staminaPercentage:F0}%]";
+        }
+        else 
+        {
             statusText += $" [体力:{staminaPercentage:F0}%]";
         }
 
@@ -873,9 +849,43 @@ public class EnemyAIExtended : MonoBehaviour
             return;
         }
         
-        // 根据体力状态设置速度 - 移除原有的速度设置代码，改为调用统一方法
+        // 根据体力状态设置速度
         agent.isStopped = false;
-        SetSpeedBasedOnStamina();
+        
+        // 计算体力百分比
+        float staminaPercentage = (maxStamina > 0) ? (currentStamina / maxStamina) : 0;
+        
+        // 根据体力设置速度 - 直接设置而不是检查条件
+        if (isResting || staminaPercentage < lowStaminaThreshold)
+        {
+            // 体力不足或休息中，直接设置为步行速度
+            agent.speed = walkSpeed;
+            
+            // 每120帧输出一次日志（大约2秒）
+            if (Time.frameCount % 120 == 0)
+            {
+                Debug.Log($"🚶 敌人Lv{level}追击中(体力不足)：体力={currentStamina:F1}/{maxStamina}({staminaPercentage*100:F0}%)，步行速度={walkSpeed:F1}");
+            }
+        }
+        else if (staminaPercentage >= highStaminaThreshold)
+        {
+            // 体力充足，直接设置为奔跑速度
+            agent.speed = runSpeed;
+            
+            // 每120帧输出一次日志（大约2秒）
+            if (Time.frameCount % 120 == 0)
+            {
+                Debug.Log($"🏃 敌人Lv{level}追击中(体力充足)：体力={currentStamina:F1}/{maxStamina}({staminaPercentage*100:F0}%)，奔跑速度={runSpeed:F1}");
+            }
+        }
+        else
+        {
+            // 体力在中间状态，保持当前速度
+            if (Time.frameCount % 120 == 0)
+            {
+                Debug.Log($"⚠️ 敌人Lv{level}追击中(体力中等)：体力={currentStamina:F1}/{maxStamina}({staminaPercentage*100:F0}%)，当前速度={agent.speed:F1}");
+            }
+        }
 
         // 如果正在追击尸体
         if (currentEatingTarget != null)
@@ -968,9 +978,43 @@ public class EnemyAIExtended : MonoBehaviour
             return;
         }
         
-        // 根据体力状态设置速度 - 移除原有的速度设置代码，改为调用统一方法
+        // 根据体力状态设置速度
         agent.isStopped = false;
-        SetSpeedBasedOnStamina();
+        
+        // 计算体力百分比
+        float staminaPercentage = (maxStamina > 0) ? (currentStamina / maxStamina) : 0;
+        
+        // 根据体力设置速度 - 直接设置而不是检查条件
+        if (isResting || staminaPercentage < lowStaminaThreshold)
+        {
+            // 体力不足或休息中，使用步行速度
+            agent.speed = walkSpeed;
+            
+            // 每120帧输出一次日志（大约2秒）
+            if (Time.frameCount % 120 == 0)
+            {
+                Debug.Log($"🚶 敌人Lv{level}逃跑中(体力不足)：体力={currentStamina:F1}/{maxStamina}({staminaPercentage*100:F0}%)，步行速度={walkSpeed:F1}");
+            }
+        }
+        else if (staminaPercentage >= highStaminaThreshold)
+        {
+            // 体力充足，直接设置为奔跑速度
+            agent.speed = runSpeed;
+            
+            // 每120帧输出一次日志（大约2秒）
+            if (Time.frameCount % 120 == 0)
+            {
+                Debug.Log($"🏃 敌人Lv{level}逃跑中(体力充足)：体力={currentStamina:F1}/{maxStamina}({staminaPercentage*100:F0}%)，奔跑速度={runSpeed:F1}");
+            }
+        }
+        else
+        {
+            // 体力在中间状态，保持当前速度
+            if (Time.frameCount % 120 == 0)
+            {
+                Debug.Log($"⚠️ 敌人Lv{level}逃跑中(体力中等)：体力={currentStamina:F1}/{maxStamina}({staminaPercentage*100:F0}%)，当前速度={agent.speed:F1}");
+            }
+        }
 
         // 计算逃跑方向 - 远离目标
         Vector3 fleeDirection = (transform.position - target.position).normalized;
@@ -1047,30 +1091,68 @@ public class EnemyAIExtended : MonoBehaviour
 
     void HandleRestingState()
     {
-        // 现在Resting状态只是作为一个过渡状态，
-        // 实际的体力管理都由MonitorStamina完成
+        // 确保以步行速度移动
         if (IsAgentValid())
         {
             agent.isStopped = false;
+            agent.speed = walkSpeed;
             
-            // 游荡行为
-            if (agent.remainingDistance < 0.5f || !agent.hasPath)
+            // 如果在追击或逃跑状态下进入休息，保持原有目标但改用步行速度
+            if (target != null && (currentState == EnemyState.Hunting || currentState == EnemyState.Fleeing))
             {
-                SetNewWanderDestination();
+                agent.SetDestination(target.position);
             }
-            
-            // 如果体力已经恢复到100%，切换回游荡状态
-            if (currentStamina >= maxStamina)
+            else
             {
-                TransitionToState(EnemyState.Wandering);
+                // 如果不是追击或逃跑，就像游荡状态一样随机移动
+                if (agent.remainingDistance < 0.5f || !agent.hasPath)
+                {
+                    SetNewWanderDestination();
+                }
             }
         }
         
-        // 记录休息状态
-        if (debugStamina && Time.frameCount % 120 == 0)
+        // 在休息状态下缓慢恢复体力
+        currentStamina = Mathf.Min(maxStamina * 0.5f, currentStamina + Time.deltaTime * (maxStamina / restTime / 2));
+        
+        // 每隔一段时间记录一次体力恢复状态
+        if (Time.frameCount % 60 == 0)
         {
-            float staminaPercentage = (currentStamina / maxStamina) * 100f;
-            Debug.Log($"💤 [{Time.frameCount}] 敌人Lv{level}体力恢复中：体力={staminaPercentage:F0}%，速度={agent.speed:F1}");
+            float restTimeLeft = restTime - (Time.time - lastStateChangeTime);
+            Debug.Log($"😴 敌人Lv{level}正在休息，体力恢复中: {currentStamina:F1}/{maxStamina}，剩余休息时间: {restTimeLeft:F1}秒");
+        }
+        
+        // 休息时间到，恢复一部分体力后恢复正常行为
+        if (Time.time - lastStateChangeTime >= restTime)
+        {
+            // 确保至少恢复到50%的体力
+            currentStamina = Mathf.Max(currentStamina, maxStamina * 0.5f);
+            isResting = false;
+            
+            // 返回到之前的状态，保持原有行为但现在可以跑了
+            if (target != null)
+            {
+                if (currentState == EnemyState.Hunting || currentState == EnemyState.Fleeing)
+                {
+                    // 根据恢复的体力决定是否可以立即奔跑
+                    if (currentStamina >= maxStamina * 0.3f)
+                    {
+                        agent.speed = runSpeed;
+                        Debug.Log($"🔋 敌人Lv{level}休息完毕，恢复奔跑");
+                    }
+                    else
+                    {
+                        // 体力仍然不足，继续步行
+                        Debug.Log($"🚶 敌人Lv{level}休息完毕，但体力仍不足，继续步行");
+                    }
+                }
+            }
+            else
+            {
+                TransitionToState(EnemyState.Wandering);
+            }
+            
+            Debug.Log($"🔋 敌人Lv{level}休息完毕，体力恢复至{currentStamina:F1}/{maxStamina}");
         }
     }
 
@@ -1184,6 +1266,27 @@ public class EnemyAIExtended : MonoBehaviour
         // 如果当前状态和新状态相同，不做处理
         if (currentState == newState) return;
         
+        // 计算体力百分比
+        float staminaPercentage = (maxStamina > 0) ? (currentStamina / maxStamina) : 0;
+        
+        // 如果当前在休息且体力不足，只允许切换到游荡状态或保持休息状态
+        if (isResting && staminaPercentage < highStaminaThreshold && 
+            newState != EnemyState.Wandering && newState != EnemyState.Resting)
+        {
+            Debug.Log($"⛔ 敌人Lv{level}正在休息且体力不足({staminaPercentage*100:F0}%)，无法切换到{newState}状态");
+            return;
+        }
+        
+        // 如果准备切换到奔跑状态但体力已耗尽
+        if ((newState == EnemyState.Hunting || newState == EnemyState.Fleeing) && 
+            staminaPercentage <= 0)
+        {
+            Debug.Log($"⛔ 敌人Lv{level}体力耗尽，无法进入{newState}状态");
+            // 强制进入休息状态
+            newState = EnemyState.Resting;
+            isResting = true;
+        }
+        
         // 记录上一个状态
         EnemyState oldState = currentState;
         
@@ -1197,21 +1300,21 @@ public class EnemyAIExtended : MonoBehaviour
             case EnemyState.Hunting:
             case EnemyState.Fleeing:
                 // 从奔跑状态退出
-                Debug.Log($"🔄 敌人Lv{level}退出奔跑状态，当前体力: {currentStamina:F1}/{maxStamina} ({currentStamina/maxStamina:F0}%)");
+                Debug.Log($"🔄 敌人Lv{level}退出奔跑状态，当前体力: {currentStamina:F1}/{maxStamina} ({staminaPercentage*100:F0}%)");
                 break;
                 
             case EnemyState.Resting:
                 // 如果体力仍然不足，禁止退出休息状态进入奔跑状态
                 if ((newState == EnemyState.Hunting || newState == EnemyState.Fleeing) && 
-                    currentStamina < maxStamina)
+                    staminaPercentage < highStaminaThreshold)
                 {
-                    Debug.Log($"⛔ 敌人Lv{level}体力不足({currentStamina/maxStamina:F0}%)，无法从休息状态切换到{newState}");
+                    Debug.Log($"⛔ 敌人Lv{level}体力不足({staminaPercentage*100:F0}%)，无法从休息状态切换到{newState}");
                     return;
                 }
                 
                 // 如果从休息状态切换出去，重置休息状态标志
                 isResting = false;
-                Debug.Log($"♻️ 敌人Lv{level}退出休息状态，体力: {currentStamina:F1}/{maxStamina} ({currentStamina/maxStamina:F0}%)");
+                Debug.Log($"♻️ 敌人Lv{level}退出休息状态，体力: {currentStamina:F1}/{maxStamina} ({staminaPercentage*100:F0}%)");
                 break;
         }
 
@@ -1247,15 +1350,15 @@ public class EnemyAIExtended : MonoBehaviour
                 {
                     agent.isStopped = false;
                     // 根据体力状态决定速度
-                    if (isResting || currentStamina < maxStamina * 0.2f)
+                    if (isResting || staminaPercentage < lowStaminaThreshold)
                     {
                         agent.speed = walkSpeed;
-                        Debug.Log($"⚠️ 敌人Lv{level}体力不足({currentStamina/maxStamina:F0}%)，以步行速度进入追击状态");
+                        Debug.Log($"⚠️ 敌人Lv{level}体力不足({staminaPercentage*100:F0}%)，以步行速度进入追击状态");
                     }
                     else
                     {
                         agent.speed = runSpeed;
-                        Debug.Log($"🏃 敌人Lv{level}开始奔跑 (Hunting)，体力: {currentStamina:F1}/{maxStamina} ({currentStamina/maxStamina:F0}%)");
+                        Debug.Log($"🏃 敌人Lv{level}开始奔跑 (Hunting)，体力: {currentStamina:F1}/{maxStamina} ({staminaPercentage*100:F0}%)");
                     }
                     
                     if (target != null)
@@ -1274,15 +1377,15 @@ public class EnemyAIExtended : MonoBehaviour
                 {
                     agent.isStopped = false;
                     // 根据体力状态决定速度
-                    if (isResting || currentStamina < maxStamina * 0.2f)
+                    if (isResting || staminaPercentage < lowStaminaThreshold)
                     {
                         agent.speed = walkSpeed;
-                        Debug.Log($"⚠️ 敌人Lv{level}体力不足({currentStamina/maxStamina:F0}%)，以步行速度进入逃跑状态");
+                        Debug.Log($"⚠️ 敌人Lv{level}体力不足({staminaPercentage*100:F0}%)，以步行速度进入逃跑状态");
                     }
                     else
                     {
                         agent.speed = runSpeed;
-                        Debug.Log($"🏃 敌人Lv{level}开始奔跑 (Fleeing)，体力: {currentStamina:F1}/{maxStamina} ({currentStamina/maxStamina:F0}%)");
+                        Debug.Log($"🏃 敌人Lv{level}开始奔跑 (Fleeing)，体力: {currentStamina:F1}/{maxStamina} ({staminaPercentage*100:F0}%)");
                     }
                 }
                 break;
@@ -1298,14 +1401,14 @@ public class EnemyAIExtended : MonoBehaviour
                     agent.speed = walkSpeed;
                 }
                 isResting = true;
-                Debug.Log($"😴 敌人Lv{level}体力不足({currentStamina/maxStamina:F0}%)，进入休息状态");
+                Debug.Log($"😴 敌人Lv{level}体力不足({staminaPercentage*100:F0}%)，进入休息状态");
                 break;
         }
 
         // 更新显示名称
         UpdateNameWithStatus();
 
-        Debug.Log($"🔄 敌人Lv{level} 从 {oldState} 切换到 {newState} 状态，体力: {currentStamina:F1}/{maxStamina} ({currentStamina/maxStamina:F0}%)");
+        Debug.Log($"🔄 敌人Lv{level} 从 {oldState} 切换到 {newState} 状态，体力: {currentStamina:F1}/{maxStamina} ({staminaPercentage*100:F0}%)");
     }
 
     // 在EnemyAIExtended.cs中修改PerformAttack方法
@@ -1431,88 +1534,44 @@ public class EnemyAIExtended : MonoBehaviour
     // 新增：碰撞检测协程
     IEnumerator ObstacleDetection()
     {
-        float lastObstacleAvoidTime = 0f;
-        float obstacleAvoidCooldown = 2.0f; // 避让冷却时间
-        
         while (true)
         {
-            // 在冷却期间不执行避让
-            if (Time.time - lastObstacleAvoidTime < obstacleAvoidCooldown)
+            // 检测前方是否有障碍物
+            Vector3 forward = transform.forward;
+            RaycastHit hit;
+            if (Physics.Raycast(transform.position + Vector3.up, forward, out hit, 2f))
             {
-                yield return new WaitForSeconds(0.5f);
-                continue;
-            }
-            
-            // 只在主动移动状态下检测障碍物
-            if (IsAgentValid() && !agent.isStopped && agent.hasPath)
-            {
-                // 检测前方是否有障碍物
-                Vector3 forward = transform.forward;
-                RaycastHit hit;
-                // 增加检测距离，提前发现障碍物
-                if (Physics.Raycast(transform.position + Vector3.up, forward, out hit, 3f))
+                // 如果检测到障碍物且它不是其他敌人或玩家
+                if (!hit.collider.CompareTag("Enemy") && !hit.collider.CompareTag("Player"))
                 {
-                    // 如果检测到障碍物且它不是其他敌人或玩家
-                    if (!hit.collider.CompareTag("Enemy") && !hit.collider.CompareTag("Player"))
+                    // 计算爬坡角度
+                    float angle = Vector3.Angle(hit.normal, Vector3.up);
+                    
+                    // 如果角度大于可处理的角度，调整路径
+                    const float maxAllowedSlope = 45f; // 使用固定值45度代替agent.slopeLimit
+                    if (angle > maxAllowedSlope)
                     {
-                        // 计算爬坡角度
-                        float angle = Vector3.Angle(hit.normal, Vector3.up);
+                        // 尝试寻找新路径
+                        Vector3 avoidDirection = Vector3.Cross(hit.normal, Vector3.up).normalized;
                         
-                        // 如果角度大于可处理的角度，调整路径
-                        float maxAllowedSlope = 45f; // 固定最大坡度
-                        if (angle > maxAllowedSlope)
+                        // 随机选择左或右避让
+                        if (UnityEngine.Random.value > 0.5f) avoidDirection = -avoidDirection;
+                        
+                        // 找寻避让点
+                        Vector3 avoidPoint = transform.position + avoidDirection * 5f;
+                        
+                        NavMeshHit navHit;
+                        if (NavMesh.SamplePosition(avoidPoint, out navHit, 5f, NavMesh.AllAreas))
                         {
-                            lastObstacleAvoidTime = Time.time; // 记录避让时间
-                            
-                            // 尝试寻找新路径（优先考虑周围的NavMesh点）
-                            NavMeshHit navHit;
-                            if (NavMesh.FindClosestEdge(transform.position, out navHit, NavMesh.AllAreas))
-                            {
-                                // 找到最近的NavMesh边缘点
-                                if (navHit.distance < 2f)
-                                {
-                                    agent.SetDestination(navHit.position + (navHit.position - transform.position).normalized * 5f);
-                                    Debug.Log($"敌人检测到不可爬行的障碍物，寻找NavMesh边缘避让。角度: {angle:F2}");
-                                    yield return new WaitForSeconds(1.0f); // 给予足够时间执行避让
-                                    continue;
-                                }
-                            }
-                            
-                            // 如果无法找到NavMesh边缘，尝试随机避让
-                            Vector3 avoidDirection = Vector3.Cross(hit.normal, Vector3.up).normalized;
-                            
-                            // 随机选择左或右避让
-                            if (UnityEngine.Random.value > 0.5f) avoidDirection = -avoidDirection;
-                            
-                            // 找寻避让点
-                            Vector3 avoidPoint = transform.position + avoidDirection * 5f;
-                            
-                            // 确保避让点在NavMesh上
-                            if (NavMesh.SamplePosition(avoidPoint, out navHit, 5f, NavMesh.AllAreas))
-                            {
-                                // 记录当前目标和路径，以便在避让后恢复
-                                Vector3 currentDestination = agent.destination;
-                                
-                                // 设置新的避让路径
-                                agent.SetDestination(navHit.position);
-                                Debug.Log($"敌人检测到不可爬行的障碍物，选择避让。角度: {angle:F2}");
-                                
-                                // 等待足够时间让敌人有机会避让
-                                yield return new WaitForSeconds(1.0f);
-                                
-                                // 如果敌人处于追击或逃跑状态，尝试恢复原来的目标
-                                if ((currentState == EnemyState.Hunting || currentState == EnemyState.Fleeing) && 
-                                    target != null)
-                                {
-                                    agent.SetDestination(target.position);
-                                }
-                                else if (Vector3.Distance(currentDestination, transform.position) > 5f)
-                                {
-                                    // 其他状态下，如果原目标还很远，尝试恢复
-                                    agent.SetDestination(currentDestination);
-                                }
-                            }
+                            // 设置新的路径点
+                            agent.SetDestination(navHit.position);
+                            Debug.Log($"敌人检测到不可爬行的障碍物，选择避让。角度: {angle}");
                         }
+                    }
+                    else
+                    {
+                        // 角度可接受，可以爬行
+                        Debug.Log($"敌人检测到可爬行的坡度。角度: {angle}");
                     }
                 }
             }
@@ -1632,133 +1691,221 @@ public class EnemyAIExtended : MonoBehaviour
     // 体力监控方法
     private void MonitorStamina()
     {
-        // 记录当前帧
-        int currentFrame = Time.frameCount;
-        
-        // 计算体力百分比
-        float staminaPercentage = currentStamina / maxStamina * 100f;
-        
-        // 判断是否在使用奔跑速度
-        bool isUsingRunSpeed = IsUsingRunSpeed();
-        bool isRunningState = (currentState == EnemyState.Hunting || currentState == EnemyState.Fleeing);
-        
-        // 调试输出当前状态 - 降低频率避免刷屏
-        if (debugStamina && currentFrame % 300 == 0)
+        // 增加强制调试输出
+        if (Time.frameCount % 300 == 0)
         {
-            Debug.Log($"🔍 [{currentFrame}] 敌人Lv{level}状态: {currentState}, 体力: {currentStamina:F1}/{maxStamina}({staminaPercentage:F0}%), " +
-                      $"可奔跑: {canRun}, 速度: {agent.speed:F1}, 实际速度: {(IsAgentValid() ? agent.velocity.magnitude : 0):F1}");
+            Debug.Log($"🔍 敌人Lv{level}体力监控检查：当前体力={currentStamina:F1}/{maxStamina} ({(currentStamina/maxStamina*100):F0}%)，状态={currentState}，速度={agent.speed:F1}，实际移动速度={agent.velocity.magnitude:F1}");
         }
         
-        // 处理体力变化 
-        // 1. 在奔跑状态且可以奔跑 - 消耗体力
-        if (isRunningState && canRun && currentStamina > 0)
+        // 判断当前状态
+        bool isRunningState = (currentState == EnemyState.Hunting || currentState == EnemyState.Fleeing);
+        
+        // 计算体力百分比
+        float staminaPercentage = (maxStamina > 0) ? (currentStamina / maxStamina) : 0;
+        
+        if (isRunningState && !isResting)
         {
-            // 确保速度正确设置
-            if (!isUsingRunSpeed && IsAgentValid())
+            // 如果在奔跑状态且不在休息，消耗体力
+            if (IsAgentValid() && agent.speed > walkSpeed * 1.2f)
             {
-                agent.speed = runSpeed;
-                Debug.Log($"🏃 [{currentFrame}] 敌人Lv{level}进入奔跑状态，设置奔跑速度: {runSpeed:F1}");
-            }
-            
-            // 消耗体力 - 只有当实际速度超过步行速度时才消耗
-            if (IsAgentValid() && agent.velocity.magnitude > walkSpeed * 1.2f)
-            {
-                float decreaseAmount = staminaDecreaseRate;
-                currentStamina = Mathf.Max(0, currentStamina - decreaseAmount);
-                lastRunTime = Time.time;
+                // 实际速度比例（越快消耗越多）
+                float speedRatio = Mathf.Clamp01(agent.velocity.magnitude / runSpeed);
                 
-                // 调试信息 - 降低频率
-                if (debugStamina && currentFrame % 60 == 0)
+                // 基于速度的体力消耗
+                float staminaDecrease = Time.deltaTime * staminaDecreaseRate * (0.5f + 0.5f * speedRatio);
+                float oldStamina = currentStamina;
+                currentStamina = Mathf.Max(0, currentStamina - staminaDecrease);
+                
+                // 每10帧记录一次体力消耗（增加频率）
+                if (Time.frameCount % 10 == 0)
                 {
-                    Debug.Log($"🏃 [{currentFrame}] 敌人Lv{level}奔跑消耗体力: {currentStamina:F1}/{maxStamina}({staminaPercentage:F0}%), 减少:{decreaseAmount:F1}点");
+                    Debug.Log($"🏃 敌人Lv{level}奔跑中，体力: {currentStamina:F1}/{maxStamina} ({staminaPercentage*100:F0}%)，消耗: {oldStamina-currentStamina:F3}/帧，速度比例: {speedRatio:F2}");
                 }
                 
                 // 检查体力是否耗尽
                 if (currentStamina <= 0)
                 {
-                    canRun = false;
-                    // 强制设置速度为步行
-                    if (IsAgentValid()) agent.speed = walkSpeed;
-                    Debug.Log($"⚠️ [{currentFrame}] 敌人Lv{level}体力耗尽，强制步行，速度设为{walkSpeed:F1}");
+                    // 体力耗尽，进入休息状态
+                    Debug.Log($"⚠️ 敌人Lv{level}体力完全耗尽！强制进入休息状态");
+                    EnterRestingState();
+                }
+                // 检查体力是否低于阈值
+                else if (staminaPercentage < lowStaminaThreshold)
+                {
+                    // 体力不足，降低速度
+                    if (agent.speed > walkSpeed)
+                    {
+                        agent.speed = walkSpeed;
+                        Debug.Log($"⚠️ 敌人Lv{level}体力不足({staminaPercentage*100:F0}%)，降低为步行速度");
+                    }
                 }
             }
         }
-        // 2. 不在奔跑或无法奔跑 - 可能恢复体力
         else
         {
-            // 确保速度正确设置为步行 - 这是安全措施
-            if (isUsingRunSpeed && IsAgentValid())
+            // 不在奔跑状态或在休息状态，恢复体力
+            if (currentState == EnemyState.Resting || isResting)
             {
-                agent.speed = walkSpeed;
-                Debug.Log($"🚶 [{currentFrame}] 敌人Lv{level}体力管理将速度从{runSpeed:F1}降至{walkSpeed:F1}");
-            }
-            
-            // 检查是否满足恢复条件 - 非奔跑状态持续指定时间
-            if (Time.time - lastRunTime >= staminaRecoveryDelay)
-            {
-                // 恢复体力 - 每0.1秒恢复staminaRecoveryRate点
-                float recoveryAmount = staminaRecoveryRate;
-                currentStamina = Mathf.Min(maxStamina, currentStamina + recoveryAmount);
+                // 在休息状态下恢复体力更快
+                float recoveryMultiplier = 1.5f;
+                float staminaRecovery = Time.deltaTime * staminaRecoveryRate * recoveryMultiplier;
+                float oldStamina = currentStamina;
+                currentStamina = Mathf.Min(maxStamina, currentStamina + staminaRecovery);
                 
-                // 如果体力恢复到最大值且之前不能奔跑，现在允许奔跑
-                if (currentStamina >= maxStamina && !canRun)
+                // 记录日志（降低频率）
+                if (Time.frameCount % 60 == 0)
                 {
-                    canRun = true;
-                    Debug.Log($"✅ [{currentFrame}] 敌人Lv{level}体力恢复至100%，可以再次奔跑");
+                    float restTimeLeft = (lastStateChangeTime + restTime) - Time.time;
+                    if (restTimeLeft > 0)
+                    {
+                        Debug.Log($"😴 敌人Lv{level}休息中，体力: {currentStamina:F1}/{maxStamina} ({staminaPercentage*100:F0}%)，剩余休息时间: {restTimeLeft:F1}秒");
+                    }
+                    else
+                    {
+                        Debug.Log($"😴 敌人Lv{level}休息恢复中，体力: {currentStamina:F1}/{maxStamina} ({staminaPercentage*100:F0}%)");
+                    }
                 }
-                // 调试信息 - 只在体力显著变化时记录
-                else if (debugStamina && currentFrame % 120 == 0 && staminaPercentage % 10 < 1)
+                
+                // 检查是否已经休息足够长的时间且体力恢复到阈值以上
+                if (isResting && Time.time - lastStateChangeTime >= restTime && staminaPercentage >= highStaminaThreshold)
                 {
-                    Debug.Log($"🔄 [{currentFrame}] 敌人Lv{level}恢复体力至: {staminaPercentage:F0}%");
+                    // 恢复正常状态
+                    ExitRestingState();
+                }
+            }
+            else
+            {
+                // 普通状态下缓慢恢复体力
+                float staminaRecovery = Time.deltaTime * staminaRecoveryRate * 0.5f;
+                float oldStamina = currentStamina;
+                currentStamina = Mathf.Min(maxStamina, currentStamina + staminaRecovery);
+                
+                // 记录日志（降低频率，只在有明显恢复时）
+                if (Time.frameCount % 120 == 0 && currentStamina > oldStamina + 0.5f)
+                {
+                    Debug.Log($"🔄 敌人Lv{level}体力恢复: {currentStamina:F1}/{maxStamina} ({staminaPercentage*100:F0}%)");
                 }
             }
         }
+        
+        // 强制执行体力限制 - 如果体力不足，不允许奔跑
+        EnforceStaminaRestrictions();
         
         // 更新状态显示
         UpdateNameWithStatus();
     }
     
-    // 添加自定义方法，控制敌人速度设置，避免冲突
-    private void SetSpeedBasedOnStamina()
+    // 强制执行体力限制
+    private void EnforceStaminaRestrictions()
     {
-        if (!IsAgentValid()) return;
+        // 计算体力百分比
+        float staminaPercentage = (maxStamina > 0) ? (currentStamina / maxStamina) : 0;
         
-        // 获取当前状态和体力情况
-        bool isRunningState = (currentState == EnemyState.Hunting || currentState == EnemyState.Fleeing);
-        bool shouldRun = isRunningState && canRun && currentStamina > 0;
-        
-        // 目标速度
-        float targetSpeed = shouldRun ? runSpeed : walkSpeed;
-        
-        // 如果当前速度接近目标速度，不做改变
-        if (Mathf.Abs(agent.speed - targetSpeed) < 0.2f)
-            return;
-        
-        // 记录当前速度（便于调试）
-        float oldSpeed = agent.speed;
-        
-        // 设置新速度
-        agent.speed = targetSpeed;
-        
-        // 输出调试信息（只在速度明显变化时）
-        if (debugStamina && Mathf.Abs(oldSpeed - targetSpeed) > 0.5f)
+        if (IsAgentValid())
         {
-            string speedChangeType = targetSpeed > oldSpeed ? "提高" : "降低";
-            string reason = shouldRun ? 
-                "进入奔跑状态" : 
-                (!canRun ? "不允许奔跑" : (currentStamina <= 0 ? "体力耗尽" : "非奔跑状态"));
+            // 如果正在休息或体力低于阈值，强制使用步行速度
+            if (isResting || staminaPercentage < lowStaminaThreshold)
+            {
+                // 获取当前速度与预期步行速度的差距
+                float speedDiff = agent.speed - walkSpeed;
+                
+                // 如果速度大于步行速度，强制减速
+                if (speedDiff > 0.1f)
+                {
+                    // 之前的速度
+                    float oldSpeed = agent.speed;
+                    
+                    // 直接设置为步行速度
+                    agent.speed = walkSpeed;
+                    
+                    // 记录日志（限制频率，避免日志过多）
+                    Debug.Log($"⚠️ 强制减速！敌人Lv{level}体力不足({staminaPercentage*100:F0}%)，速度从{oldSpeed:F1}降至{walkSpeed:F1}");
+                }
+            }
+            // 如果体力充足且处于奔跑状态，确保使用奔跑速度
+            else if (staminaPercentage >= highStaminaThreshold && 
+                    (currentState == EnemyState.Hunting || currentState == EnemyState.Fleeing) && 
+                    !isResting)
+            {
+                // 获取当前速度与预期奔跑速度的差距
+                float speedDiff = runSpeed - agent.speed;
+                
+                // 如果速度小于奔跑速度，恢复奔跑
+                if (speedDiff > 0.1f)
+                {
+                    // 之前的速度
+                    float oldSpeed = agent.speed;
+                    
+                    // 直接设置为奔跑速度
+                    agent.speed = runSpeed;
+                    
+                    // 记录日志
+                    Debug.Log($"⚡ 恢复奔跑！敌人Lv{level}体力充足({staminaPercentage*100:F0}%)，速度从{oldSpeed:F1}提升至{runSpeed:F1}");
+                }
+            }
             
-            Debug.Log($"⚡ [{Time.frameCount}] 敌人Lv{level}速度{speedChangeType}: {oldSpeed:F1}->{targetSpeed:F1}，原因: {reason}");
+            // 增加：检查实际速度是否与设定速度匹配
+            if (Time.frameCount % 120 == 0)
+            {
+                float expectedSpeed = (isResting || staminaPercentage < lowStaminaThreshold) ? walkSpeed : 
+                                    ((currentState == EnemyState.Hunting || currentState == EnemyState.Fleeing) && staminaPercentage >= highStaminaThreshold) ? runSpeed : agent.speed;
+                
+                float actualSpeed = agent.velocity.magnitude;
+                float speedDifference = Mathf.Abs(expectedSpeed - actualSpeed);
+                
+                if (speedDifference > 0.5f && actualSpeed > 0.1f)
+                {
+                    Debug.Log($"⚠️ 速度不匹配！敌人Lv{level}的预期速度={expectedSpeed:F1}，实际速度={actualSpeed:F1}，差距={speedDifference:F1}");
+                }
+            }
         }
     }
-
-    // 新增：判断是否在使用奔跑速度的工具方法
-    private bool IsUsingRunSpeed()
+    
+    // 进入休息状态
+    private void EnterRestingState()
     {
-        return (currentState == EnemyState.Hunting || currentState == EnemyState.Fleeing) && agent.speed == runSpeed;
+        currentStamina = 0;
+        isResting = true;
+        lastStateChangeTime = Time.time;
+        
+        // 如果不在休息状态，切换到休息状态
+        if (currentState != EnemyState.Resting)
+        {
+            Debug.Log($"😓 敌人Lv{level}体力耗尽，进入休息状态");
+            TransitionToState(EnemyState.Resting);
+        }
+        
+        // 确保速度降低
+        if (IsAgentValid() && agent.speed > walkSpeed)
+        {
+            agent.speed = walkSpeed;
+        }
     }
-
-    // 在文件开头添加一个调试变量
-    [Header("调试参数")]
-    public bool debugStamina = true;  // 是否输出体力系统调试信息
+    
+    // 退出休息状态
+    private void ExitRestingState()
+    {
+        isResting = false;
+        
+        // 计算体力百分比
+        float staminaPercentage = (maxStamina > 0) ? (currentStamina / maxStamina) : 0;
+        
+        Debug.Log($"🔋 敌人Lv{level}休息完毕，体力恢复至{currentStamina:F1}/{maxStamina} ({staminaPercentage*100:F0}%)");
+        
+        // 如果在休息状态，切换回游荡状态
+        if (currentState == EnemyState.Resting)
+        {
+            TransitionToState(EnemyState.Wandering);
+        }
+        // 如果当前在追击或逃跑状态，恢复奔跑速度
+        else if ((currentState == EnemyState.Hunting || currentState == EnemyState.Fleeing) && 
+                 staminaPercentage >= highStaminaThreshold)
+        {
+            if (IsAgentValid() && agent.speed < runSpeed)
+            {
+                agent.speed = runSpeed;
+                Debug.Log($"⚡ 恢复奔跑！敌人Lv{level}体力已恢复，恢复奔跑速度");
+            }
+        }
+    }
 }

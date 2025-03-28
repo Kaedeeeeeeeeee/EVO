@@ -49,6 +49,8 @@ public class EnemyHealthBar : MonoBehaviour
 
     void Start()
     {
+        Debug.Log("EnemyHealthBar启动，UI朝向已修复");
+        
         // 初始显示或隐藏
         if (showOnStart)
         {
@@ -65,8 +67,8 @@ public class EnemyHealthBar : MonoBehaviour
         // 确保面向摄像机
         if (mainCamera != null)
         {
-            // 直接面向摄像机
-            transform.LookAt(mainCamera.transform.position);
+            // 使UI始终面向摄像机，但保持Y轴朝上
+            transform.rotation = mainCamera.transform.rotation;
         }
 
         // 处理淡出
@@ -115,6 +117,7 @@ public class EnemyHealthBar : MonoBehaviour
         if (levelText != null)
         {
             levelText.text = $"Lv{level}";
+            Debug.Log($"🔢 设置敌人等级UI为: Lv{level}");
 
             // 根据等级设置颜色
             switch (level)

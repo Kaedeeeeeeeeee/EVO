@@ -17,6 +17,17 @@ public class EnemyData
     [Range(0, 100)]
     public int spawnWeight;           // 生成权重（用于控制不同等级敌人的生成概率）
     
+    // 修改后的体力系统参数
+    [Header("体力系统")]
+    [Range(10, 200)]
+    public float maxStamina = 100f;   // 最大体力值
+    [Range(0.1f, 10f)]
+    public float staminaDecreaseRate = 1f; // 每0.1秒减少的体力值
+    [Range(0.1f, 10f)]
+    public float staminaRecoveryRate = 2f; // 每0.1秒恢复的体力值
+    [Range(0.1f, 5f)]
+    public float staminaRecoveryDelay = 1f; // 开始恢复体力的延迟时间(秒)
+    
     // 新增尸体相关属性
     [Header("尸体属性")]
     public int corpseHealAmount = 20; // 尸体恢复生命值
@@ -41,5 +52,6 @@ public enum EnemyState
     Hunting,        // 追猎
     Attacking,      // 攻击
     Fleeing,        // 逃跑
-    Eating          // 进食
+    Eating,         // 进食
+    Resting         // 休息（新增）
 }
