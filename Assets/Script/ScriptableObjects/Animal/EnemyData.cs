@@ -16,6 +16,11 @@ public class EnemyData
 
     [Range(0, 100)]
     public int spawnWeight;           // 生成权重（用于控制不同等级敌人的生成概率）
+    
+    // 新增尸体相关属性
+    [Header("尸体属性")]
+    public int corpseHealAmount = 20; // 尸体恢复生命值
+    public int corpseEvoPoints = 10;  // 尸体提供的进化点数
 }
 
 // 饥饿状态枚举

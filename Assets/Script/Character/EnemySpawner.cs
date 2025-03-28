@@ -50,18 +50,25 @@ public class EnemySpawner : MonoBehaviour
         TerrainGenerator terrain = FindFirstObjectByType<TerrainGenerator>();
         if (terrain != null)
         {
-            // 移除旧的监听器避免重复
+            // 移除所有旧的监听器
             terrain.OnMapGenerationComplete -= StartSpawning;
-            // 添加新的监听器
-            terrain.OnMapGenerationComplete += StartSpawning;
+            terrain.OnTerrainGenerationComplete -= OnTerrainGenerationComplete;
+            terrain.OnNavMeshBakeComplete -= OnNavMeshBakeComplete;
+            terrain.OnGrassGenerationComplete -= OnGrassGenerationComplete;
+            terrain.OnMapGenerationComplete -= OnMapGenerationComplete;
             
-            Debug.Log("敌人生成器已连接到地形生成器");
+            // 只添加一次事件监听
+            terrain.OnTerrainGenerationComplete += OnTerrainGenerationComplete;
+            terrain.OnNavMeshBakeComplete += OnNavMeshBakeComplete;
+            terrain.OnGrassGenerationComplete += OnGrassGenerationComplete;
+            terrain.OnMapGenerationComplete += OnMapGenerationComplete;
+            
+            Debug.Log("敌人生成器已连接到地形生成器的事件系统");
         }
         else
         {
-            // 增加更长的延迟，确保其他组件已初始化
             Debug.LogWarning("未找到TerrainGenerator，延迟启动敌人生成");
-            Invoke("DelayedSpawn", 3f); // 减少延迟时间，但确保在玩家加载后执行
+            Invoke("DelayedSpawn", 3f);
         }
 
         // 检查必要引用
@@ -153,24 +160,14 @@ public class EnemySpawner : MonoBehaviour
     // 修改StartSpawning方法，确保它会开始生成敌人
     void StartSpawning()
     {
-        Debug.Log("收到地形生成完成事件，开始生成敌人...");
-        
-        // 确保有玩家引用
-        if (player == null)
+        // 防止重复生成
+        if (spawnedEnemies.Count > 0)
         {
-            player = GameObject.FindGameObjectWithTag("Player")?.transform;
-            if (player == null)
-            {
-                Debug.LogWarning("StartSpawning时未找到玩家，延迟尝试...");
-                Invoke("DelayedSpawn", 1f);
-                return;
-            }
+            Debug.LogWarning("已经存在生成的敌人，跳过本次生成");
+            return;
         }
-        
-        // 确保已初始化地形边界
-        InitializeMainGroundBounds();
-        
-        // 开始生成敌人
+
+        Debug.Log("开始生成敌人...");
         StartCoroutine(SpawnInitialEnemies());
     }
 
@@ -248,9 +245,17 @@ public class EnemySpawner : MonoBehaviour
         yield return new WaitForSeconds(1f); // 等待场景完全加载
 
         int successfulSpawns = 0;
+        int attempts = 0;
+        int maxAttempts = maxEnemies * 2; // 设置最大尝试次数
 
-        for (int i = 0; i < maxEnemies; i++)
+        while (successfulSpawns < maxEnemies && attempts < maxAttempts)
         {
+            if (spawnedEnemies.Count >= maxEnemies)
+            {
+                Debug.Log("已达到最大敌人数量，停止生成");
+                break;
+            }
+
             bool success = SpawnEnemy();
             if (success)
             {
@@ -260,51 +265,41 @@ public class EnemySpawner : MonoBehaviour
                     Debug.Log($"✅ 成功生成敌人 {successfulSpawns}/{maxEnemies}");
                 }
             }
-            else
-            {
-                if (debugMode)
-                {
-                    Debug.LogWarning($"⚠️ 敌人 #{i + 1} 生成失败");
-                }
-            }
 
-            yield return new WaitForSeconds(initialSpawnDelay); // 分批生成，避免卡顿
+            attempts++;
+            yield return new WaitForSeconds(initialSpawnDelay);
         }
 
-        Debug.Log($"🏁 初始敌人生成完成: 成功 {successfulSpawns}/{maxEnemies}");
+        Debug.Log($"🏁 初始敌人生成完成: 成功 {successfulSpawns}/{maxEnemies}，总尝试次数：{attempts}");
     }
 
     void Update()
     {
-        // 移除已销毁的敌人
+        // 只保留清理无效引用的逻辑
         int removedCount = spawnedEnemies.RemoveAll(enemy => enemy == null);
         if (removedCount > 0 && debugMode)
         {
-            Debug.Log($"🧹 清理了 {removedCount} 个无效敌人引用");
-        }
-
-        // 检查是否需要补充敌人
-        if (spawnedEnemies.Count < maxEnemies)
-        {
-            // 随机决定是否生成新敌人（每秒约5%的几率）
-            if (Random.value < 0.05f * Time.deltaTime)
-            {
-                bool success = SpawnEnemy();
-                if (success && debugMode)
-                {
-                    Debug.Log($"✅ 动态补充生成了一个敌人，当前总数: {spawnedEnemies.Count}/{maxEnemies}");
-                }
-            }
+            Debug.Log($"🧹 清理了 {removedCount} 个无效敌人引用，当前敌人数量：{spawnedEnemies.Count}");
         }
     }
 
     private bool SpawnEnemy()
     {
+        // 添加数量检查
+        if (spawnedEnemies.Count >= maxEnemies)
+        {
+            if (debugMode)
+            {
+                Debug.LogWarning($"⚠️ 已达到最大敌人数量限制 ({maxEnemies})，不再生成新敌人");
+            }
+            return false;
+        }
+
         Vector3 spawnPosition = GetValidSpawnPosition();
         if (spawnPosition == Vector3.zero)
         {
             failedSpawnAttempts++;
-            if (debugMode && failedSpawnAttempts % 5 == 0) // 避免日志过多
+            if (debugMode && failedSpawnAttempts % 5 == 0)
             {
                 Debug.LogWarning($"⚠️ 无法找到有效的敌人生成位置，已累计失败 {failedSpawnAttempts} 次");
             }
@@ -420,6 +415,13 @@ public class EnemySpawner : MonoBehaviour
                 {
                     renderer.material = enemyData.enemyMaterial;
                 }
+            }
+            
+            // 设置尸体相关数据（只需设置关联健康值，因为尸体是在死亡时生成的）
+            if (health != null)
+            {
+                // 设置敌人死亡后掉落的进化点数（用于后续生成的尸体）
+                health.levelDropped = enemyData.corpseEvoPoints;
             }
         }
 
@@ -715,11 +717,17 @@ public class EnemySpawner : MonoBehaviour
     // 添加OnDestroy方法确保正确清理资源和取消事件订阅
     void OnDestroy()
     {
-        // 取消对地形生成器的事件订阅
+        // 移除事件监听
         TerrainGenerator terrain = FindFirstObjectByType<TerrainGenerator>();
         if (terrain != null)
         {
             terrain.OnMapGenerationComplete -= StartSpawning;
+            
+            // 移除分阶段事件监听
+            terrain.OnTerrainGenerationComplete -= OnTerrainGenerationComplete;
+            terrain.OnNavMeshBakeComplete -= OnNavMeshBakeComplete;
+            terrain.OnGrassGenerationComplete -= OnGrassGenerationComplete;
+            terrain.OnMapGenerationComplete -= OnMapGenerationComplete;
         }
         
         // 停止所有协程
@@ -760,10 +768,23 @@ public class EnemySpawner : MonoBehaviour
         {
             // 移除旧的监听器
             terrain.OnMapGenerationComplete -= StartSpawning;
+            
+            // 使用新的分阶段事件系统
+            terrain.OnTerrainGenerationComplete -= OnTerrainGenerationComplete;
+            terrain.OnNavMeshBakeComplete -= OnNavMeshBakeComplete;
+            terrain.OnGrassGenerationComplete -= OnGrassGenerationComplete;
+            terrain.OnMapGenerationComplete -= OnMapGenerationComplete;
+            
             // 添加新的监听器
+            terrain.OnTerrainGenerationComplete += OnTerrainGenerationComplete;
+            terrain.OnNavMeshBakeComplete += OnNavMeshBakeComplete;
+            terrain.OnGrassGenerationComplete += OnGrassGenerationComplete;
+            terrain.OnMapGenerationComplete += OnMapGenerationComplete;
+            
+            // 保留向后兼容
             terrain.OnMapGenerationComplete += StartSpawning;
             
-            Debug.Log("敌人生成器重新连接到地形生成器");
+            Debug.Log("敌人生成器重新连接到地形生成器的分阶段事件系统");
         }
         else
         {
@@ -779,5 +800,54 @@ public class EnemySpawner : MonoBehaviour
         
         // 重新初始化MainGround边界
         InitializeMainGroundBounds();
+    }
+
+    // 新增：接收地形生成事件
+    private void OnTerrainGenerationComplete()
+    {
+        Debug.Log("EnemySpawner接收到地形生成完成事件");
+    }
+    
+    // 新增：接收NavMesh烘焙完成事件
+    private void OnNavMeshBakeComplete()
+    {
+        Debug.Log("EnemySpawner接收到NavMesh烘焙完成事件");
+    }
+    
+    // 新增：接收草地生成完成事件
+    private void OnGrassGenerationComplete()
+    {
+        Debug.Log("EnemySpawner接收到草地生成完成事件");
+    }
+    
+    // 新增：接收地图生成完成事件
+    private void OnMapGenerationComplete()
+    {
+        Debug.Log("EnemySpawner接收到地图全部生成完成事件，准备生成敌人");
+        StartSpawning(); // 直接调用StartSpawning，不再依赖外部调用
+    }
+    
+    // 新增：供GameManager调用的公共方法
+    public void SpawnEnemies()
+    {
+        Debug.Log("GameManager请求生成敌人");
+        
+        // 确保有玩家引用
+        if (player == null)
+        {
+            player = GameObject.FindGameObjectWithTag("Player")?.transform;
+            if (player == null)
+            {
+                Debug.LogWarning("SpawnEnemies时未找到玩家，延迟尝试...");
+                Invoke("DelayedSpawn", 1f);
+                return;
+            }
+        }
+        
+        // 确保已初始化地形边界
+        InitializeMainGroundBounds();
+        
+        // 开始生成敌人
+        StartCoroutine(SpawnInitialEnemies());
     }
 }

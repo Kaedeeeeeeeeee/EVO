@@ -24,21 +24,24 @@ public class GameManager : MonoBehaviour
     private bool isGameOver = false;
     private PlayerHealth playerHealth;
     private bool isProcessingRestart = false;
+    private TerrainGenerator terrainGenerator;
+    private EnemySpawner enemySpawner;
 
     private void Awake()
     {
-        // 确保场景中只有一个GameManager
-        GameManager[] managers = FindObjectsOfType<GameManager>();
-        if (managers.Length > 1)
+        if (Instance == null)
         {
-            // 如果已经有GameManager，销毁这个新实例
+            Instance = this;
+            DontDestroyOnLoad(this.gameObject);
+        }
+        else
+        {
             Destroy(gameObject);
             return;
         }
         
-        // 单例设置
-        Instance = this;
-        DontDestroyOnLoad(gameObject);
+        // 确保NavMeshManager存在
+        EnsureNavMeshManagerExists();
         
         // 确保UI面板初始状态为隐藏
         if (gameOverPanel != null) gameOverPanel.SetActive(false);
@@ -109,8 +112,8 @@ public class GameManager : MonoBehaviour
         }
         
         // 检查并确保地形生成
-        TerrainGenerator terrainGen = TerrainGenerator.Instance;
-        if (terrainGen != null)
+        terrainGenerator = FindObjectOfType<TerrainGenerator>();
+        if (terrainGenerator != null)
         {
             Debug.Log("初始化游戏场景: 找到TerrainGenerator");
             
@@ -119,8 +122,14 @@ public class GameManager : MonoBehaviour
                 SceneManager.GetActiveScene().buildIndex != SceneManager.GetSceneByName("MainMenu").buildIndex)
             {
                 Debug.Log("首次从主菜单进入游戏，强制重新生成地形");
-                StartCoroutine(FirstTimeSceneSetup(terrainGen));
+                StartCoroutine(FirstTimeSceneSetup(terrainGenerator));
             }
+            
+            // 订阅TerrainGenerator的事件
+            terrainGenerator.OnTerrainGenerationComplete += OnTerrainGenerationComplete;
+            terrainGenerator.OnNavMeshBakeComplete += OnNavMeshBakeComplete;
+            terrainGenerator.OnGrassGenerationComplete += OnGrassGenerationComplete;
+            terrainGenerator.OnMapGenerationComplete += OnMapGenerationComplete;
         }
         else
         {
@@ -130,6 +139,37 @@ public class GameManager : MonoBehaviour
         Debug.Log("游戏场景已初始化，UI面板已隐藏");
     }
     
+    // 确保NavMeshManager和GrassManager存在
+    private void EnsureNavMeshManagerExists()
+    {
+        // 检查NavMeshManager
+        if (NavMeshManager.Instance == null)
+        {
+            GameObject navMeshManagerObj = new GameObject("NavMeshManager");
+            navMeshManagerObj.AddComponent<NavMeshManager>();
+            Debug.Log("GameManager创建了NavMeshManager");
+        }
+        
+        // 检查GrassManager
+        if (GrassManager.Instance == null)
+        {
+            GameObject grassManagerObj = new GameObject("GrassManager");
+            // 确保对象是激活的
+            grassManagerObj.SetActive(true);
+            grassManagerObj.AddComponent<GrassManager>();
+            Debug.Log("GameManager创建了GrassManager");
+        }
+        else
+        {
+            // 确保GrassManager是激活的
+            if (!GrassManager.Instance.gameObject.activeSelf)
+            {
+                Debug.LogWarning("GrassManager对象不活跃，GameManager正在激活它");
+                GrassManager.Instance.gameObject.SetActive(true);
+            }
+        }
+    }
+
     // 首次从主菜单进入时的特殊设置
     private IEnumerator FirstTimeSceneSetup(TerrainGenerator terrainGen)
     {
@@ -137,25 +177,25 @@ public class GameManager : MonoBehaviour
         yield return null;
         yield return null;
         
-        // 强制重新生成地形
-        Debug.Log("首次场景设置: 强制重新生成地形");
-        terrainGen.RegenerateMap();
+        // 使用修改后的方法触发事件而不是重新生成地形
+        Debug.Log("首次场景设置: 触发地形事件");
+        terrainGen.TriggerEvents();
         
-        // 等待地形生成完成
+        // 等待地形事件触发完成
         yield return new WaitForSeconds(0.5f);
         
         // 初始化敌人生成器
-        EnemySpawner spawner = FindFirstObjectByType<EnemySpawner>();
-        if (spawner != null)
+        enemySpawner = FindFirstObjectByType<EnemySpawner>();
+        if (enemySpawner != null)
         {
             Debug.Log("首次场景设置: 重新初始化敌人生成器");
-            spawner.ReInitialize();
+            enemySpawner.ReInitialize();
             
             // 再次延迟，确保初始化完成
             yield return null;
             
             // 手动启动敌人生成
-            spawner.SendMessage("StartSpawning", null, SendMessageOptions.DontRequireReceiver);
+            enemySpawner.SendMessage("StartSpawning", null, SendMessageOptions.DontRequireReceiver);
         }
         else
         {
@@ -165,6 +205,20 @@ public class GameManager : MonoBehaviour
 
     private void Start()
     {
+        if (terrainGenerator == null)
+        {
+            terrainGenerator = FindObjectOfType<TerrainGenerator>();
+        }
+        
+        if (terrainGenerator != null)
+        {
+            // 订阅TerrainGenerator的事件
+            terrainGenerator.OnTerrainGenerationComplete += OnTerrainGenerationComplete;
+            terrainGenerator.OnNavMeshBakeComplete += OnNavMeshBakeComplete;
+            terrainGenerator.OnGrassGenerationComplete += OnGrassGenerationComplete;
+            terrainGenerator.OnMapGenerationComplete += OnMapGenerationComplete;
+        }
+        
         currentGameTime = maxGameTime;
         playerHealth = FindFirstObjectByType<PlayerHealth>();
         gameOverPanel.SetActive(false);
@@ -383,14 +437,14 @@ public class GameManager : MonoBehaviour
             }
         }
         
-        // 强制TerrainGenerator重新生成地形
+        // 强制TerrainGenerator触发事件
         TerrainGenerator terrainGen = TerrainGenerator.Instance;
         if (terrainGen != null)
         {
-            Debug.Log("场景加载后强制重新生成地形");
-            terrainGen.RegenerateMap();
+            Debug.Log("场景加载后触发地形事件");
+            terrainGen.TriggerEvents();
             
-            // 等待一小段时间，确保地形生成完成
+            // 等待一小段时间，确保事件触发完成
             yield return new WaitForSeconds(0.5f);
             
             // 检查是否有敌人生成器
@@ -427,7 +481,7 @@ public class GameManager : MonoBehaviour
                 // 如果找到了敌人生成器，确保它接收到地形生成完成事件
                 Debug.Log("找到敌人生成器，手动重新初始化");
                 
-                // 延迟一帧再调用，确保地形真正生成完毕
+                // 延迟一帧再调用，确保事件真正触发完毕
                 yield return null;
                 
                 // 调用敌人生成器的重新初始化方法
@@ -436,18 +490,14 @@ public class GameManager : MonoBehaviour
                 // 再次延迟一帧，确保所有初始化都完成
                 yield return null;
                 
-                // 如果TerrainGenerator已经完成生成，手动调用StartSpawning
-                if (!terrainGen.isGenerating)
-                {
-                    Debug.Log("地形生成已完成，手动启动敌人生成");
-                    enemySpawner.SendMessage("StartSpawning", null, SendMessageOptions.DontRequireReceiver);
-                }
-                // 如果TerrainGenerator仍在生成，事件会自动触发StartSpawning
+                // 地形事件已经触发，直接启动敌人生成
+                Debug.Log("地形事件已触发，手动启动敌人生成");
+                enemySpawner.SendMessage("StartSpawning", null, SendMessageOptions.DontRequireReceiver);
             }
         }
         else
         {
-            Debug.LogError("未找到TerrainGenerator实例，无法重新生成地形和敌人");
+            Debug.LogError("未找到TerrainGenerator实例，无法触发地形事件和敌人生成");
         }
         
         Debug.Log("游戏重启清理完成");
@@ -482,20 +532,20 @@ public class GameManager : MonoBehaviour
         TerrainGenerator terrainGen = TerrainGenerator.Instance;
         if (terrainGen != null)
         {
-            // 强制地形生成器重新生成地形
-            Debug.Log("强制重新生成地形...");
+            // 强制地形生成器触发事件
+            Debug.Log("强制触发地形事件...");
             try
             {
-                terrainGen.RegenerateMap();
+                terrainGen.TriggerEvents();
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"重新生成地形时出错: {e.Message}");
+                Debug.LogError($"触发地形事件时出错: {e.Message}");
             }
         }
         else
         {
-            Debug.LogWarning("未找到TerrainGenerator实例，无法重新生成地形");
+            Debug.LogWarning("未找到TerrainGenerator实例，无法触发地形事件");
         }
         
         // 标记需要重置的UI组件
@@ -668,6 +718,15 @@ public class GameManager : MonoBehaviour
         fireworksEffectLeft = null;
         fireworksEffectRight = null;
         playerHealth = null;
+        
+        // 取消订阅事件，防止内存泄漏
+        if (terrainGenerator != null)
+        {
+            terrainGenerator.OnTerrainGenerationComplete -= OnTerrainGenerationComplete;
+            terrainGenerator.OnNavMeshBakeComplete -= OnNavMeshBakeComplete;
+            terrainGenerator.OnGrassGenerationComplete -= OnGrassGenerationComplete;
+            terrainGenerator.OnMapGenerationComplete -= OnMapGenerationComplete;
+        }
     }
 
     public void TriggerGameOver()
@@ -755,6 +814,51 @@ public class GameManager : MonoBehaviour
             {
                 Debug.LogWarning("未找到胜利面板");
             }
+        }
+    }
+
+    // 地形生成完成时调用
+    private void OnTerrainGenerationComplete()
+    {
+        Debug.Log("GameManager收到通知：基础地形生成完成");
+        // 可以在这里执行一些与地形相关的初始化
+    }
+    
+    // NavMesh烘焙完成时调用
+    private void OnNavMeshBakeComplete()
+    {
+        Debug.Log("GameManager收到通知：NavMesh烘焙完成");
+        // 可以在这里执行一些与NavMesh相关的初始化
+    }
+    
+    // 草地生成完成时调用
+    private void OnGrassGenerationComplete()
+    {
+        Debug.Log("GameManager收到通知：草地生成完成");
+        // 可以在这里执行一些与草地相关的初始化
+    }
+    
+    // 整个地图生成完成时调用
+    private void OnMapGenerationComplete()
+    {
+        Debug.Log("GameManager收到通知：地图全部生成完成，开始生成敌人");
+        
+        // 在这里生成敌人
+        SpawnEnemies();
+    }
+    
+    // 生成敌人的方法
+    private void SpawnEnemies()
+    {
+        if (enemySpawner != null)
+        {
+            // 调用敌人生成器的生成方法
+            enemySpawner.SpawnEnemies();
+            Debug.Log("敌人生成开始");
+        }
+        else
+        {
+            Debug.LogWarning("找不到敌人生成器，无法生成敌人");
         }
     }
 } 

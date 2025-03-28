@@ -8,6 +8,7 @@ public class PlayerAirSpawner : MonoBehaviour
     [SerializeField] private float spawnHeight = 20f; // 生成高度
     [SerializeField] private float landingRadius = 10f; // 着陆区域半径
     [SerializeField] private GameObject playerPrefab; // 玩家预制体，如果需要实例化
+    [SerializeField] private LayerMask groundLayer; // 地面层掩码
     
     [Header("效果设置")]
     [SerializeField] private bool addEntryEffect = true; // 是否添加入场效果
@@ -21,22 +22,18 @@ public class PlayerAirSpawner : MonoBehaviour
     
     private void Start()
     {
-        // 获取TerrainGenerator引用
-        terrainGenerator = FindObjectOfType<TerrainGenerator>();
+        // 如果没有设置地面层，默认使用"Default"层
+        if (groundLayer.value == 0)
+        {
+            groundLayer = 1 << LayerMask.NameToLayer("Default");
+            Debug.Log($"使用默认层作为地面层: {LayerMask.LayerToName(Mathf.RoundToInt(Mathf.Log(groundLayer.value, 2)))}");
+        }
         
-        if (terrainGenerator != null)
-        {
-            // 订阅地图生成完成事件
-            terrainGenerator.OnMapGenerationComplete += SpawnPlayerFromAir;
-        }
-        else
-        {
-            // 如果找不到TerrainGenerator，直接尝试生成
-            Invoke("SpawnPlayerFromAir", 1.0f);
-        }
+        // 直接尝试生成玩家
+        SpawnPlayerFromAir();
     }
     
-    // 这个方法可以从TerrainGenerator完成时调用
+    // 这个方法可以从外部调用来重新生成玩家
     public void SpawnPlayerFromAir()
     {
         if (hasSpawned) return;
@@ -96,31 +93,56 @@ public class PlayerAirSpawner : MonoBehaviour
     
     private void FindLandingPosition()
     {
-        // 获取地图中心
-        Vector3 mapCenter = Vector3.zero;
-        if (terrainGenerator != null)
+        // 获取MainGround对象
+        GameObject mainGround = GameObject.Find("MainGround");
+        if (mainGround == null)
         {
-            // 这里假设TerrainGenerator有一个获取中心点的方法，或者使用默认值
-            // 如果TerrainGenerator类没有这样的方法，可以用估计值
-            mapCenter = new Vector3(0, 0, 0);
+            Debug.LogError("找不到MainGround对象！");
+            landingPosition = Vector3.zero;
+            return;
         }
+
+        // 获取MainGround的Renderer组件来确定边界
+        Renderer groundRenderer = mainGround.GetComponent<Renderer>();
+        if (groundRenderer == null)
+        {
+            Debug.LogError("MainGround没有Renderer组件！");
+            landingPosition = Vector3.zero;
+            return;
+        }
+
+        // 获取MainGround的边界
+        Bounds bounds = groundRenderer.bounds;
+        Debug.Log($"MainGround边界: 中心点={bounds.center}, 大小={bounds.size}");
         
-        // 在中心区域找一个随机位置
-        float angle = Random.Range(0f, 360f) * Mathf.Deg2Rad;
-        float distance = Random.Range(0f, landingRadius);
-        float x = mapCenter.x + Mathf.Cos(angle) * distance;
-        float z = mapCenter.z + Mathf.Sin(angle) * distance;
+        // 在边界范围内随机选择一个位置，但要留出一定的边距
+        float margin = 2f; // 边距，防止玩家生成在边缘
+        float x = Random.Range(bounds.min.x + margin, bounds.max.x - margin);
+        float z = Random.Range(bounds.min.z + margin, bounds.max.z - margin);
+        
+        Debug.Log($"随机选择的位置: x={x}, z={z}");
         
         // 使用射线检测获取地面高度
+        Vector3 rayStart = new Vector3(x, 1000f, z);
+        Ray ray = new Ray(rayStart, Vector3.down);
         RaycastHit hit;
-        if (Physics.Raycast(new Vector3(x, 1000f, z), Vector3.down, out hit, 2000f))
+        
+        // 在Scene视图中绘制射线，便于调试
+        Debug.DrawRay(rayStart, Vector3.down * 2000f, Color.red, 5f);
+        
+        if (Physics.Raycast(ray, out hit, 2000f, groundLayer))
         {
             landingPosition = hit.point;
+            Debug.Log($"射线检测命中点: {landingPosition}，碰撞对象: {hit.collider.gameObject.name}，层: {LayerMask.LayerToName(hit.collider.gameObject.layer)}");
+            
+            // 在Scene视图中绘制命中点
+            Debug.DrawLine(hit.point, hit.point + Vector3.up * 2f, Color.green, 5f);
         }
         else
         {
-            // 如果射线没有命中任何物体，使用默认高度
-            landingPosition = new Vector3(x, 0, z);
+            // 如果射线没有命中任何物体，使用MainGround的Y坐标
+            landingPosition = new Vector3(x, bounds.min.y, z);
+            Debug.LogWarning($"射线检测失败，使用默认高度：{landingPosition}，当前地面层设置: {groundLayer.value}");
         }
     }
     

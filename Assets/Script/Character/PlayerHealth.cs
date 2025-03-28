@@ -59,6 +59,15 @@ public class PlayerHealth : MonoBehaviour
         Debug.Log("玩家恢复了 " + amount + " 生命值，当前血量：" + currentHealth);
     }
 
+    // 新增：根据敌人等级计算恢复量
+    public void HealFromEnemy(int enemyLevel)
+    {
+        // 基础回复量20，每级额外增加10点
+        int healAmount = 20 + (enemyLevel * 10);
+        Heal(healAmount);
+        Debug.Log($"🍖 玩家食用了Lv{enemyLevel}的敌人尸体，恢复了{healAmount}生命值！");
+    }
+
     void UpdateHealthUI()
     {
         if (healthBar != null)
