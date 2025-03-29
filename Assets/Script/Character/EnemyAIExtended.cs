@@ -8,37 +8,37 @@ using System;
 public class EnemyAIExtended : MonoBehaviour
 {
     // 敌人属性
-    public int level = 1;                    // 敌人等级
-    public float walkSpeed = 2f;             // 行走速度
-    public float runSpeed = 5f;              // 奔跑速度
-    public float visionRange = 10f;          // 视野范围
-    public float attackRange = 2f;           // 攻击范围
-    public int attackDamage = 10;            // 攻击伤害
-    public float attackCooldown = 1f;        // 攻击冷却时间
-    public float huntThreshold = 30f;        // 猎杀阈值（饥饿百分比）
+    public int level;                    // 敌人等级
+    public float walkSpeed;             // 行走速度
+    public float runSpeed;              // 奔跑速度
+    public float visionRange;          // 视野范围
+    public float attackRange;           // 攻击范围
+    public int attackDamage;            // 攻击伤害
+    public float attackCooldown;        // 攻击冷却时间
+    public float huntThreshold;        // 猎杀阈值（饥饿百分比）
 
     // 行为参数
-    public float wanderRadius = 10f;         // 游荡半径
-    public float wanderInterval = 5f;        // 游荡间隔时间
-    public float alertDuration = 3f;         // 警觉持续时间
-    public float eatingDuration = 5f;        // 进食持续时间
-    public float hungerDecreaseRate = 0.1f;  // 饥饿值降低速率（每秒）
+    public float wanderRadius;         // 游荡半径
+    public float wanderInterval;        // 游荡间隔时间
+    public float alertDuration;         // 警觉持续时间
+    public float eatingDuration;        // 进食持续时间
+    public float hungerDecreaseRate;  // 饥饿值降低速率（每秒）
     
     // 体力系统参数
     [Header("体力系统")]
-    public float maxStamina = 100f;           // 最大体力值
+    public float maxStamina;           // 最大体力值
     public float currentStamina;              // 当前体力值
-    public float staminaDecreaseRate = 1f;    // 每0.1秒减少的体力值
-    public float staminaRecoveryRate = 2f;    // 每0.1秒恢复的体力值
-    public float staminaRecoveryDelay = 1.0f; // 恢复体力前的延迟时间（秒）
+    public float staminaDecreaseRate;    // 每0.1秒减少的体力值
+    public float staminaRecoveryRate;    // 每0.1秒恢复的体力值
+    public float staminaRecoveryDelay; // 恢复体力前的延迟时间（秒）
     private float lastRunTime = 0f;           // 上次奔跑时间
     public bool canRun = true;                // 是否可以奔跑
-    public float restTime = 5f;              // 休息时间（秒）
+    public float restTime;              // 休息时间（秒）
     public bool isResting = false;           // 是否正在休息
     
     // 新增：物理碰撞参数
-    public float collisionCheckRadius = 1.0f;  // 碰撞检测半径
-    public float pushForce = 5.0f;            // 推力大小
+    public float collisionCheckRadius;  // 碰撞检测半径
+    public float pushForce;            // 推力大小
     public LayerMask terrainLayerMask;        // 地形层遮罩
     public bool useRigidbody = true;          // 是否使用刚体进行物理交互
 
@@ -280,6 +280,14 @@ public class EnemyAIExtended : MonoBehaviour
     // 新增：初始化物理组件
     private void InitializePhysicsComponents()
     {
+        // 检查是否存在CharacterController并移除，因为它会与Rigidbody冲突
+        CharacterController characterController = GetComponent<CharacterController>();
+        if (characterController != null)
+        {
+            Debug.LogWarning($"移除与Rigidbody冲突的CharacterController组件");
+            Destroy(characterController);
+        }
+        
         // 检查和设置刚体
         rb = GetComponent<Rigidbody>();
         if (rb == null && useRigidbody)
@@ -325,7 +333,10 @@ public class EnemyAIExtended : MonoBehaviour
         gameObject.layer = LayerMask.NameToLayer("Enemy");
         
         // 设置地形层遮罩
-        terrainLayerMask = LayerMask.GetMask("Default");
+        if (terrainLayerMask.value == 0)
+        {
+            terrainLayerMask = LayerMask.GetMask("Default", "Terrain", "Ground");
+        }
     }
     
     // 创建物理材质
@@ -573,6 +584,27 @@ public class EnemyAIExtended : MonoBehaviour
         {
             agent = GetComponent<NavMeshAgent>();
         }
+
+        // 确保属性有默认值，防止未设置时出错
+        if (walkSpeed <= 0) walkSpeed = 2f;
+        if (runSpeed <= 0) runSpeed = 5f;
+        if (visionRange <= 0) visionRange = 10f;
+        if (attackRange <= 0) attackRange = 2f;
+        if (attackDamage <= 0) attackDamage = 10;
+        if (attackCooldown <= 0) attackCooldown = 1f;
+        if (huntThreshold <= 0) huntThreshold = 30f;
+        if (wanderRadius <= 0) wanderRadius = 10f;
+        if (wanderInterval <= 0) wanderInterval = 5f;
+        if (alertDuration <= 0) alertDuration = 3f;
+        if (eatingDuration <= 0) eatingDuration = 5f;
+        if (hungerDecreaseRate <= 0) hungerDecreaseRate = 0.1f;
+        if (maxStamina <= 0) maxStamina = 100f;
+        if (staminaDecreaseRate <= 0) staminaDecreaseRate = 1f;
+        if (staminaRecoveryRate <= 0) staminaRecoveryRate = 2f;
+        if (staminaRecoveryDelay <= 0) staminaRecoveryDelay = 1f;
+        if (restTime <= 0) restTime = 5f;
+        if (collisionCheckRadius <= 0) collisionCheckRadius = 1f;
+        if (pushForce <= 0) pushForce = 5f;
 
         // 设置基本导航参数
         agent.speed = walkSpeed;

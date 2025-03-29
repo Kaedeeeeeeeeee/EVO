@@ -453,7 +453,7 @@ GameObject:
   - component: {fileID: 4203687711656398374}
   - component: {fileID: 8592144788571991367}
   m_Layer: 0
-  m_Name: Dog_001
+  m_Name: Dog_Enemy
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

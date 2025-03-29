@@ -1,0 +1,8 @@
+TypeID,TypeName,Description,SpawnWeight
+CAT,Feline,Small feline enemy with high speed but low health,60
+DOG,Canine,Medium canine enemy with balanced speed and attack power,50
+DEER,Cervidae,Medium deer enemy with high speed but low attack power,40
+CHICKEN,Bird,Small avian enemy with high agility but very low health,70
+HORSE,Equine,Large horse enemy with high health but slower speed,30
+TIGER,Tiger,Large feline enemy with high attack power but slower speed,20
+PENGUIN,Penguin,Small aquatic bird enemy adapted to water environments,30 

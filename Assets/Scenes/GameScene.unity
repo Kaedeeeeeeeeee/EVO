@@ -12170,6 +12170,62 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 9069115365609054727, guid: 60f79905accf3b24fa0114b941f1aac0, type: 3}
   m_PrefabInstance: {fileID: 1441667322}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1444820643
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1444820645}
+  - component: {fileID: 1444820644}
+  m_Layer: 0
+  m_Name: EnemyManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1444820644
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1444820643}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 05979843a2f594338bd5bde35f0414f4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  enemyDataFilePath: EnemyData/EnemyStats
+  enemyTypesFilePath: EnemyData/EnemyTypes
+  enemyPrefabMappings:
+  - enemyTypeID: CAT
+    enemyTypeName: Feline
+    prefab: {fileID: 6397291155531275063, guid: 7d8be077b0d304a9596dd48a282b16f7, type: 3}
+  - enemyTypeID: DOG
+    enemyTypeName: Canine
+    prefab: {fileID: 2629182449500102118, guid: 8577049d0da654d3c8b8830bc839c246, type: 3}
+  - enemyTypeID: DEER
+    enemyTypeName: Cervidae
+    prefab: {fileID: 7402009758359158996, guid: 2678ccfd00f734f968f1ac118a8633d3, type: 3}
+--- !u!4 &1444820645
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1444820643}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -187.27466, y: 1.4175472, z: 3.259308}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &1447949763
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -13895,94 +13951,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 67db2f75a5ece4858baa344b94105eef, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  enemyPrefab: {fileID: 183043215}
-  healthBarPrefab: {fileID: 0}
-  enemyDataArray:
-  - enemyName: "\u5F31\u5C0F\u52A8\u7269"
-    level: 1
-    maxHealth: 50
-    attackDamage: 5
-    walkSpeed: 2
-    runSpeed: 4
-    visionRange: 8
-    attackRange: 1.5
-    huntThreshold: 30
-    enemyMaterial: {fileID: 0}
-    spawnWeight: 40
-    maxStamina: 100
-    staminaDecreaseRate: 1
-    staminaRecoveryRate: 2
-    staminaRecoveryDelay: 1
-    corpseHealAmount: 20
-    corpseEvoPoints: 10
-  - enemyName: "\u666E\u901A\u730E\u624B"
-    level: 2
-    maxHealth: 80
-    attackDamage: 10
-    walkSpeed: 2.5
-    runSpeed: 5
-    visionRange: 10
-    attackRange: 1.8
-    huntThreshold: 40
-    enemyMaterial: {fileID: 0}
-    spawnWeight: 30
-    maxStamina: 10
-    staminaDecreaseRate: 1
-    staminaRecoveryRate: 2
-    staminaRecoveryDelay: 1
-    corpseHealAmount: 20
-    corpseEvoPoints: 10
-  - enemyName: "\u5F3A\u608D\u730E\u98DF\u8005"
-    level: 3
-    maxHealth: 120
-    attackDamage: 15
-    walkSpeed: 3
-    runSpeed: 6
-    visionRange: 12
-    attackRange: 2
-    huntThreshold: 35
-    enemyMaterial: {fileID: 0}
-    spawnWeight: 15
-    maxStamina: 10
-    staminaDecreaseRate: 1
-    staminaRecoveryRate: 2
-    staminaRecoveryDelay: 1
-    corpseHealAmount: 20
-    corpseEvoPoints: 10
-  - enemyName: "\u9876\u7EA7\u63A0\u98DF\u8005"
-    level: 4
-    maxHealth: 180
-    attackDamage: 20
-    walkSpeed: 3.5
-    runSpeed: 7
-    visionRange: 15
-    attackRange: 2.2
-    huntThreshold: 30
-    enemyMaterial: {fileID: 0}
-    spawnWeight: 10
-    maxStamina: 10
-    staminaDecreaseRate: 1
-    staminaRecoveryRate: 2
-    staminaRecoveryDelay: 1
-    corpseHealAmount: 20
-    corpseEvoPoints: 10
-  - enemyName: "\u730E\u98DF\u4E4B\u738B"
-    level: 5
-    maxHealth: 250
-    attackDamage: 30
-    walkSpeed: 4
-    runSpeed: 8
-    visionRange: 18
-    attackRange: 2.5
-    huntThreshold: 25
-    enemyMaterial: {fileID: 0}
-    spawnWeight: 5
-    maxStamina: 10
-    staminaDecreaseRate: 1
-    staminaRecoveryRate: 2
-    staminaRecoveryDelay: 1
-    corpseHealAmount: 20
-    corpseEvoPoints: 10
+  healthBarPrefab: {fileID: 5283380927879105230}
+  useCSVData: 1
+  enemyTypes: []
+  activeEnemyTypeIDs:
+  - CAT
+  - DOG
+  - DEER
   maxEnemies: 100
   mainGround: {fileID: 297066856}
   minDistanceFromPlayer: 5
@@ -16755,6 +16730,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 977951877}
     m_Modifications:
+    - target: {fileID: 554355303355295121, guid: b702c844a594742f0b8bd4215c02d7d6, type: 3}
+      propertyPath: m_Name
+      value: EnemyLevelText
+      objectReference: {fileID: 0}
     - target: {fileID: 1644616915427488491, guid: b702c844a594742f0b8bd4215c02d7d6, type: 3}
       propertyPath: m_Pivot.x
       value: 0.5
@@ -16851,11 +16830,20 @@ PrefabInstance:
       propertyPath: m_Camera
       value: 
       objectReference: {fileID: 1136385242}
+    - target: {fileID: 7591925021052476487, guid: b702c844a594742f0b8bd4215c02d7d6, type: 3}
+      propertyPath: m_Name
+      value: EnemyHealthBarBG
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: b702c844a594742f0b8bd4215c02d7d6, type: 3}
+--- !u!1 &5283380927879105230 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 2042306890279207139, guid: b702c844a594742f0b8bd4215c02d7d6, type: 3}
+  m_PrefabInstance: {fileID: 5283380927879105229}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -16877,4 +16865,5 @@ SceneRoots:
   - {fileID: 822012636}
   - {fileID: 1529028209}
   - {fileID: 253396031}
+  - {fileID: 1444820645}
   - {fileID: 475236855}

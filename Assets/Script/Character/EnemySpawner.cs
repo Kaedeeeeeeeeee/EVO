@@ -3,12 +3,81 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using System.Linq;
 
 public class EnemySpawner : MonoBehaviour
 {
-    public GameObject enemyPrefab;             // 敌人预制体
+    // 移除原有敌人类型配置，改为使用EnemyDataManager
     public GameObject healthBarPrefab;         // 敌人血条预制体
-    public EnemyData[] enemyDataArray;         // 敌人数据数组
+    
+    [Header("敌人生成设置")]
+    [Tooltip("是否使用CSV配置数据")]
+    public bool useCSVData = true;             // 是否使用CSV数据
+    
+    [Tooltip("当useCSVData=false时使用这些配置")]
+    [System.Serializable]
+    public class EnemyTypeConfig
+    {
+        public string enemyTypeName;           // 敌人类型名称
+        public GameObject enemyPrefab;         // 敌人预制体
+        public EnemyData[] enemyDataArray;     // 该类型敌人的数据配置
+        [Range(0, 100)]
+        public int spawnWeight = 50;           // 该类型敌人的生成权重
+    }
+    
+    [Tooltip("当useCSVData=false时使用的敌人类型配置")]
+    public EnemyTypeConfig[] enemyTypes;       // 敌人类型配置数组
+    
+    [Header("生成配置")]
+    [Tooltip("要生成的敌人类型ID列表（留空则生成全部类型）")]
+    public List<string> activeEnemyTypeIDs = new List<string>();  // 要生成的敌人类型ID列表
+    
+    // 兼容原有代码的敌人数据数组，从所有enemyTypes中收集
+    private EnemyData[] enemyDataArray 
+    {
+        get
+        {
+            if (useCSVData)
+            {
+                List<EnemyData> allEnemyData = new List<EnemyData>();
+                
+                // 检查EnemyDataManager是否可用
+                if (EnemyDataManager.Instance == null)
+                {
+                    Debug.LogError("❌ EnemyDataManager未初始化，请确保场景中有EnemyDataManager组件");
+                    return allEnemyData.ToArray();
+                }
+                
+                // 获取所有活跃的敌人类型ID
+                List<string> typeIDs = activeEnemyTypeIDs.Count > 0 
+                    ? activeEnemyTypeIDs 
+                    : EnemyDataManager.Instance.GetAllEnemyTypeIDs();
+                
+                // 收集所有敌人数据
+                foreach (string typeID in typeIDs)
+                {
+                    allEnemyData.AddRange(EnemyDataManager.Instance.GetEnemyDataByType(typeID));
+                }
+                
+                return allEnemyData.ToArray();
+            }
+            else
+            {
+                List<EnemyData> allEnemyData = new List<EnemyData>();
+                if (enemyTypes != null)
+                {
+                    foreach (var type in enemyTypes)
+                    {
+                        if (type.enemyDataArray != null)
+                        {
+                            allEnemyData.AddRange(type.enemyDataArray);
+                        }
+                    }
+                }
+                return allEnemyData.ToArray();
+            }
+        }
+    }
 
     [Header("生成数量设置")]
     [Range(1, 100)]
@@ -72,10 +141,47 @@ public class EnemySpawner : MonoBehaviour
         }
 
         // 检查必要引用
-        if (enemyPrefab == null)
+        if (useCSVData)
         {
-            Debug.LogError("❌ EnemySpawner: 未设置敌人预制体！");
-            return;
+            // 检查EnemyDataManager是否可用
+            if (EnemyDataManager.Instance == null)
+            {
+                Debug.LogError("❌ EnemyDataManager未初始化，请确保场景中有EnemyDataManager组件");
+                
+                // 创建EnemyDataManager
+                GameObject managerObj = new GameObject("EnemyDataManager");
+                managerObj.AddComponent<EnemyDataManager>();
+                Debug.Log("✅ 已自动创建EnemyDataManager");
+            }
+        }
+        else
+        {
+            if (enemyTypes == null || enemyTypes.Length == 0)
+            {
+                Debug.LogError("❌ EnemySpawner: 未设置敌人类型配置！");
+                return;
+            }
+
+            bool allValid = true;
+            foreach (var enemyType in enemyTypes)
+            {
+                if (enemyType.enemyPrefab == null)
+                {
+                    Debug.LogError($"❌ EnemySpawner: 敌人类型 '{enemyType.enemyTypeName}' 未设置敌人预制体！");
+                    allValid = false;
+                }
+                
+                if (enemyType.enemyDataArray == null || enemyType.enemyDataArray.Length == 0)
+                {
+                    Debug.LogError($"❌ EnemySpawner: 敌人类型 '{enemyType.enemyTypeName}' 未设置敌人数据！");
+                    allValid = false;
+                }
+            }
+            
+            if (!allValid)
+            {
+                return;
+            }
         }
 
         // 初始化MainGround边界
@@ -569,33 +675,254 @@ public class EnemySpawner : MonoBehaviour
 
     private EnemyData GetRandomEnemyData()
     {
-        if (enemyDataArray == null || enemyDataArray.Length == 0)
+        if (useCSVData)
         {
+            // 使用CSV数据系统
+            if (EnemyDataManager.Instance == null)
+            {
+                Debug.LogError("❌ EnemyDataManager未初始化！");
+                return null;
+            }
+            
+            // 获取要生成的敌人类型ID列表
+            List<string> typeIDs = activeEnemyTypeIDs.Count > 0 
+                ? activeEnemyTypeIDs 
+                : EnemyDataManager.Instance.GetAllEnemyTypeIDs();
+                
+            if (typeIDs.Count == 0)
+            {
+                Debug.LogError("❌ 没有可用的敌人类型！");
+                return null;
+            }
+            
+            // 计算所有类型的总权重
+            int totalTypeWeight = 0;
+            Dictionary<string, int> typeWeights = new Dictionary<string, int>();
+            
+            foreach (string typeID in typeIDs)
+            {
+                int weight = EnemyDataManager.Instance.GetEnemyTypeSpawnWeight(typeID);
+                if (weight > 0)
+                {
+                    typeWeights[typeID] = weight;
+                    totalTypeWeight += weight;
+                }
+            }
+            
+            if (totalTypeWeight == 0)
+            {
+                Debug.LogError("❌ 所有敌人类型的权重都为0！");
+                return null;
+            }
+            
+            // 按权重随机选择一个类型
+            int randomTypeWeight = Random.Range(0, totalTypeWeight);
+            int currentTypeWeight = 0;
+            string selectedTypeID = typeIDs[0];
+            
+            foreach (var entry in typeWeights)
+            {
+                currentTypeWeight += entry.Value;
+                if (randomTypeWeight < currentTypeWeight)
+                {
+                    selectedTypeID = entry.Key;
+                    break;
+                }
+            }
+            
+            // 获取选中类型的敌人数据列表
+            List<EnemyData> enemiesOfType = EnemyDataManager.Instance.GetEnemyDataByType(selectedTypeID);
+            if (enemiesOfType.Count == 0)
+            {
+                Debug.LogWarning($"⚠️ 类型 '{selectedTypeID}' 没有敌人数据，尝试使用其他类型");
+                
+                // 尝试其他类型
+                foreach (string typeID in typeIDs)
+                {
+                    enemiesOfType = EnemyDataManager.Instance.GetEnemyDataByType(typeID);
+                    if (enemiesOfType.Count > 0)
+                    {
+                        selectedTypeID = typeID;
+                        break;
+                    }
+                }
+                
+                if (enemiesOfType.Count == 0)
+                {
+                    Debug.LogError("❌ 所有敌人类型都没有数据！");
+                    return null;
+                }
+            }
+            
+            // 根据权重选择该类型中的一个敌人数据
+            int totalEnemyWeight = enemiesOfType.Sum(e => e.spawnWeight);
+            int randomEnemyWeight = Random.Range(0, totalEnemyWeight);
+            int currentEnemyWeight = 0;
+            
+            EnemyData selectedData = null;
+            
+            foreach (EnemyData data in enemiesOfType)
+            {
+                currentEnemyWeight += data.spawnWeight;
+                if (randomEnemyWeight < currentEnemyWeight)
+                {
+                    selectedData = data;
+                    break;
+                }
+            }
+            
+            if (selectedData == null && enemiesOfType.Count > 0)
+            {
+                selectedData = enemiesOfType[0];
+            }
+            
+            // 创建包装类，包含敌人数据和对应的预制体
+            if (selectedData != null)
+            {
+                CSVEnemyDataWrapper wrapper = new CSVEnemyDataWrapper();
+                wrapper.data = selectedData;
+                wrapper.typeID = selectedTypeID;
+                wrapper.prefab = EnemyDataManager.Instance.GetEnemyPrefab(selectedTypeID);
+                return wrapper;
+            }
+            
             return null;
         }
-
-        // 计算总权重
-        int totalWeight = 0;
-        foreach (EnemyData data in enemyDataArray)
+        else
         {
-            totalWeight += data.spawnWeight;
-        }
-
-        // 随机选择基于权重的敌人类型
-        int randomWeight = Random.Range(0, totalWeight);
-        int currentWeight = 0;
-
-        foreach (EnemyData data in enemyDataArray)
-        {
-            currentWeight += data.spawnWeight;
-            if (randomWeight < currentWeight)
+            // 原有的数据管理方式
+            if (enemyTypes == null || enemyTypes.Length == 0)
             {
-                return data;
+                return null;
             }
-        }
 
-        // 默认返回第一个
-        return enemyDataArray[0];
+            // 先按权重选择敌人类型
+            int totalTypeWeight = 0;
+            foreach (var type in enemyTypes)
+            {
+                totalTypeWeight += type.spawnWeight;
+            }
+
+            // 随机选择敌人类型
+            int randomTypeWeight = Random.Range(0, totalTypeWeight);
+            int currentTypeWeight = 0;
+            
+            EnemyTypeConfig selectedType = enemyTypes[0];
+            
+            foreach (var type in enemyTypes)
+            {
+                currentTypeWeight += type.spawnWeight;
+                if (randomTypeWeight < currentTypeWeight)
+                {
+                    selectedType = type;
+                    break;
+                }
+            }
+            
+            // 确保选中的类型有敌人数据
+            if (selectedType.enemyDataArray == null || selectedType.enemyDataArray.Length == 0)
+            {
+                Debug.LogWarning($"⚠️ 选中的敌人类型 '{selectedType.enemyTypeName}' 没有敌人数据，使用第一个有效类型");
+                // 寻找第一个有效的敌人类型
+                foreach (var type in enemyTypes)
+                {
+                    if (type.enemyDataArray != null && type.enemyDataArray.Length > 0)
+                    {
+                        selectedType = type;
+                        break;
+                    }
+                }
+            }
+            
+            // 从选中的类型中按权重选择敌人数据
+            int totalWeight = 0;
+            foreach (EnemyData data in selectedType.enemyDataArray)
+            {
+                totalWeight += data.spawnWeight;
+            }
+
+            int randomWeight = Random.Range(0, totalWeight);
+            int currentWeight = 0;
+
+            // 包装返回的敌人数据和预制体
+            EnemyDataWithPrefab result = new EnemyDataWithPrefab();
+            
+            foreach (EnemyData data in selectedType.enemyDataArray)
+            {
+                currentWeight += data.spawnWeight;
+                if (randomWeight < currentWeight)
+                {
+                    // 记录选中的敌人数据和对应的预制体
+                    result.data = data;
+                    result.prefab = selectedType.enemyPrefab;
+                    return result;
+                }
+            }
+
+            // 默认返回第一个
+            if (selectedType.enemyDataArray.Length > 0)
+            {
+                result.data = selectedType.enemyDataArray[0];
+                result.prefab = selectedType.enemyPrefab;
+                return result;
+            }
+            
+            Debug.LogError("❌ 无法选择有效的敌人数据！");
+            return null;
+        }
+    }
+
+    // 新增包装类，用于包装来自CSV的敌人数据
+    private class CSVEnemyDataWrapper : EnemyData
+    {
+        public string typeID;
+        public GameObject prefab;
+        public EnemyData data;
+        
+        // 转发所有属性到data对象
+        public new string enemyName { get { return data != null ? data.enemyName : ""; } }
+        public new int level { get { return data != null ? data.level : 1; } }
+        public new int maxHealth { get { return data != null ? data.maxHealth : 50; } }
+        public new int attackDamage { get { return data != null ? data.attackDamage : 5; } }
+        public new float walkSpeed { get { return data != null ? data.walkSpeed : 2f; } }
+        public new float runSpeed { get { return data != null ? data.runSpeed : 4f; } }
+        public new float visionRange { get { return data != null ? data.visionRange : 8f; } }
+        public new float attackRange { get { return data != null ? data.attackRange : 1.5f; } }
+        public new float huntThreshold { get { return data != null ? data.huntThreshold : 30f; } }
+        public new Material enemyMaterial { get { return data != null ? data.enemyMaterial : null; } }
+        public new int spawnWeight { get { return data != null ? data.spawnWeight : 50; } }
+        public new float maxStamina { get { return data != null ? data.maxStamina : 100f; } }
+        public new float staminaDecreaseRate { get { return data != null ? data.staminaDecreaseRate : 1f; } }
+        public new float staminaRecoveryRate { get { return data != null ? data.staminaRecoveryRate : 2f; } }
+        public new float staminaRecoveryDelay { get { return data != null ? data.staminaRecoveryDelay : 1f; } }
+        public new int corpseHealAmount { get { return data != null ? data.corpseHealAmount : 20; } }
+        public new int corpseEvoPoints { get { return data != null ? data.corpseEvoPoints : 10; } }
+    }
+
+    // 原有的包装类，用于包装编辑器配置的敌人数据
+    private class EnemyDataWithPrefab : EnemyData
+    {
+        public GameObject prefab;
+        public EnemyData data;
+        
+        // 转发所有属性到data对象
+        public new string enemyName { get { return data != null ? data.enemyName : ""; } }
+        public new int level { get { return data != null ? data.level : 1; } }
+        public new int maxHealth { get { return data != null ? data.maxHealth : 50; } }
+        public new int attackDamage { get { return data != null ? data.attackDamage : 5; } }
+        public new float walkSpeed { get { return data != null ? data.walkSpeed : 2f; } }
+        public new float runSpeed { get { return data != null ? data.runSpeed : 4f; } }
+        public new float visionRange { get { return data != null ? data.visionRange : 8f; } }
+        public new float attackRange { get { return data != null ? data.attackRange : 1.5f; } }
+        public new float huntThreshold { get { return data != null ? data.huntThreshold : 30f; } }
+        public new Material enemyMaterial { get { return data != null ? data.enemyMaterial : null; } }
+        public new int spawnWeight { get { return data != null ? data.spawnWeight : 50; } }
+        public new float maxStamina { get { return data != null ? data.maxStamina : 100f; } }
+        public new float staminaDecreaseRate { get { return data != null ? data.staminaDecreaseRate : 1f; } }
+        public new float staminaRecoveryRate { get { return data != null ? data.staminaRecoveryRate : 2f; } }
+        public new float staminaRecoveryDelay { get { return data != null ? data.staminaRecoveryDelay : 1f; } }
+        public new int corpseHealAmount { get { return data != null ? data.corpseHealAmount : 20; } }
+        public new int corpseEvoPoints { get { return data != null ? data.corpseEvoPoints : 10; } }
     }
 
     // 调试辅助方法 - 强制生成指定数量的敌人
@@ -813,8 +1140,76 @@ public class EnemySpawner : MonoBehaviour
 
     private GameObject SpawnEnemy(EnemyData enemyData, Vector3 spawnPosition)
     {
+        // 获取正确的敌人预制体
+        GameObject prefabToSpawn;
+        
+        // 根据不同的数据源获取预制体
+        if (enemyData is CSVEnemyDataWrapper)
+        {
+            CSVEnemyDataWrapper dataWithPrefab = (CSVEnemyDataWrapper)enemyData;
+            prefabToSpawn = dataWithPrefab.prefab;
+            
+            // 使用包装类中的实际数据
+            enemyData = dataWithPrefab.data;
+            
+            if (prefabToSpawn == null)
+            {
+                Debug.LogError($"❌ 类型 '{dataWithPrefab.typeID}' 的预制体为空！");
+                return null;
+            }
+        }
+        else if (enemyData is EnemyDataWithPrefab)
+        {
+            EnemyDataWithPrefab dataWithPrefab = (EnemyDataWithPrefab)enemyData;
+            prefabToSpawn = dataWithPrefab.prefab;
+            
+            // 使用包装类中的实际数据
+            enemyData = dataWithPrefab.data;
+        }
+        else
+        {
+            // 尝试查找预制体
+            if (useCSVData && EnemyDataManager.Instance != null)
+            {
+                // 尝试从所有注册的敌人类型中找到匹配的预制体
+                prefabToSpawn = null;
+                
+                foreach (string typeID in EnemyDataManager.Instance.GetAllEnemyTypeIDs())
+                {
+                    List<EnemyData> enemies = EnemyDataManager.Instance.GetEnemyDataByType(typeID);
+                    if (enemies.Contains(enemyData))
+                    {
+                        prefabToSpawn = EnemyDataManager.Instance.GetEnemyPrefab(typeID);
+                        break;
+                    }
+                }
+                
+                if (prefabToSpawn == null)
+                {
+                    // 使用第一个可用的预制体
+                    var typeIDs = EnemyDataManager.Instance.GetAllEnemyTypeIDs();
+                    if (typeIDs.Count > 0)
+                    {
+                        prefabToSpawn = EnemyDataManager.Instance.GetEnemyPrefab(typeIDs[0]);
+                        Debug.LogWarning("⚠️ 无法确定敌人数据对应的预制体，使用默认预制体");
+                    }
+                }
+            }
+            else if (enemyTypes != null && enemyTypes.Length > 0)
+            {
+                // 查找本地配置的预制体
+                prefabToSpawn = enemyTypes[0].enemyPrefab;
+                Debug.LogWarning("⚠️ 使用默认敌人预制体，因为无法确定当前敌人数据对应的预制体");
+            }
+            else
+            {
+                Debug.LogError("❌ 无法找到有效的敌人预制体！");
+                return null;
+            }
+        }
+
         // 实例化敌人预制体
-        GameObject enemyInstance = Instantiate(enemyPrefab, spawnPosition, Quaternion.identity);
+        GameObject enemyInstance = Instantiate(prefabToSpawn, spawnPosition, Quaternion.identity);
 
         // 设置敌人属性
         EnemyAIExtended enemyAI = enemyInstance.GetComponent<EnemyAIExtended>();
