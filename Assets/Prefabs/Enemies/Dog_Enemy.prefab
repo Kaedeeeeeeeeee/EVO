@@ -457,7 +457,6 @@ GameObject:
   - component: {fileID: -4797164065524102722}
   - component: {fileID: 5772374462536127802}
   - component: {fileID: -1272281861223922546}
-  - component: {fileID: -4227871905160819134}
   m_Layer: 0
   m_Name: Dog_Enemy
   m_TagString: Enemy
@@ -678,25 +677,6 @@ MonoBehaviour:
   showVisionRange: 1
   showAttackRange: 1
   debugStamina: 1
---- !u!114 &-4227871905160819134
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2629182449500102118}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7035c46c0a41f402bacb984e8b537c8c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  healthBarFill: {fileID: 0}
-  levelText: {fileID: 0}
-  healthSlider: {fileID: 0}
-  showDuration: 3
-  fadeSpeed: 3
-  showOnStart: 1
-  alwaysVisible: 0
 --- !u!1 &2735724662372591797
 GameObject:
   m_ObjectHideFlags: 0

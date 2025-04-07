@@ -1029,7 +1029,6 @@ GameObject:
   - component: {fileID: -2821276950320908815}
   - component: {fileID: 5727735032380759526}
   - component: {fileID: -6659599091820806058}
-  - component: {fileID: 6900646404385968627}
   m_Layer: 0
   m_Name: Deer_Enemy
   m_TagString: Enemy
@@ -1248,27 +1247,8 @@ MonoBehaviour:
     m_Bits: 0
   useRigidbody: 1
   showVisionRange: 1
-  showAttackRange: 1
+  showAttackRange: 0
   debugStamina: 1
---- !u!114 &6900646404385968627
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7402009758359158996}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7035c46c0a41f402bacb984e8b537c8c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  healthBarFill: {fileID: 0}
-  levelText: {fileID: 0}
-  healthSlider: {fileID: 0}
-  showDuration: 3
-  fadeSpeed: 3
-  showOnStart: 1
-  alwaysVisible: 0
 --- !u!1 &7500468941402322376
 GameObject:
   m_ObjectHideFlags: 0

@@ -7,40 +7,40 @@ using System;
 [RequireComponent(typeof(EnemyHealth))]
 public class EnemyAIExtended : MonoBehaviour
 {
-    // 敌人属性
-    public int level;                    // 敌人等级
-    public float walkSpeed;             // 行走速度
-    public float runSpeed;              // 奔跑速度
-    public float visionRange;          // 视野范围
-    public float attackRange;           // 攻击范围
-    public int attackDamage;            // 攻击伤害
-    public float attackCooldown;        // 攻击冷却时间
-    public float huntThreshold;        // 猎杀阈值（饥饿百分比）
+    // 敌人属性 - 这些字段现在通过EnemySpawner从CSV数据中设置
+    [HideInInspector] public int level;                    // 敌人等级
+    [HideInInspector] public float walkSpeed;             // 行走速度
+    [HideInInspector] public float runSpeed;              // 奔跑速度
+    [HideInInspector] public float visionRange;          // 视野范围
+    [HideInInspector] public float attackRange;           // 攻击范围
+    [HideInInspector] public int attackDamage;            // 攻击伤害
+    [HideInInspector] public float attackCooldown;        // 攻击冷却时间
+    [HideInInspector] public float huntThreshold;        // 猎杀阈值（饥饿百分比）
 
     // 行为参数
-    public float wanderRadius;         // 游荡半径
-    public float wanderInterval;        // 游荡间隔时间
-    public float alertDuration;         // 警觉持续时间
-    public float eatingDuration;        // 进食持续时间
-    public float hungerDecreaseRate;  // 饥饿值降低速率（每秒）
+    [HideInInspector] public float wanderRadius;         // 游荡半径
+    [HideInInspector] public float wanderInterval;        // 游荡间隔时间
+    [HideInInspector] public float alertDuration;         // 警觉持续时间
+    [HideInInspector] public float eatingDuration;        // 进食持续时间
+    [HideInInspector] public float hungerDecreaseRate;  // 饥饿值降低速率（每秒）
     
     // 体力系统参数
     [Header("体力系统")]
-    public float maxStamina;           // 最大体力值
-    public float currentStamina;              // 当前体力值
-    public float staminaDecreaseRate;    // 每0.1秒减少的体力值
-    public float staminaRecoveryRate;    // 每0.1秒恢复的体力值
-    public float staminaRecoveryDelay; // 恢复体力前的延迟时间（秒）
+    [HideInInspector] public float maxStamina;           // 最大体力值
+    [HideInInspector] public float currentStamina;              // 当前体力值
+    [HideInInspector] public float staminaDecreaseRate;    // 每0.1秒减少的体力值
+    [HideInInspector] public float staminaRecoveryRate;    // 每0.1秒恢复的体力值
+    [HideInInspector] public float staminaRecoveryDelay; // 恢复体力前的延迟时间（秒）
     private float lastRunTime = 0f;           // 上次奔跑时间
-    public bool canRun = true;                // 是否可以奔跑
-    public float restTime;              // 休息时间（秒）
-    public bool isResting = false;           // 是否正在休息
+    [HideInInspector] public bool canRun = true;                // 是否可以奔跑
+    [HideInInspector] public float restTime;              // 休息时间（秒）
+    [HideInInspector] public bool isResting = false;           // 是否正在休息
     
     // 新增：物理碰撞参数
-    public float collisionCheckRadius;  // 碰撞检测半径
-    public float pushForce;            // 推力大小
-    public LayerMask terrainLayerMask;        // 地形层遮罩
-    public bool useRigidbody = true;          // 是否使用刚体进行物理交互
+    [HideInInspector] public float collisionCheckRadius;  // 碰撞检测半径
+    [HideInInspector] public float pushForce;            // 推力大小
+    [HideInInspector] public LayerMask terrainLayerMask;        // 地形层遮罩
+    [HideInInspector] public bool useRigidbody = true;          // 是否使用刚体进行物理交互
 
     // 组件引用
     private NavMeshAgent agent;
@@ -59,8 +59,8 @@ public class EnemyAIExtended : MonoBehaviour
     private int playerLevel = 1;             // 玩家等级（需从玩家处获取）
 
     // 调试可视化
-    public bool showVisionRange = true;
-    public bool showAttackRange = true;
+    [HideInInspector] public bool showVisionRange = true;
+    [HideInInspector] public bool showAttackRange = true;
 
     private Transform currentEatingTarget; // 新增：当前正在进食的目标
 
@@ -252,6 +252,9 @@ public class EnemyAIExtended : MonoBehaviour
         
         // 初始化状态和时间
         lastStateChangeTime = Time.time;
+        
+        // 确保level至少为1
+        if (level <= 0) level = 1;
         
         // 设置根据等级的属性
         AdjustStatsByLevel();
@@ -1586,6 +1589,9 @@ public class EnemyAIExtended : MonoBehaviour
     // 根据等级调整敌人属性
     private void AdjustStatsByLevel()
     {
+        // 确保level至少为1
+        if (level <= 0) level = 1;
+        
         // 基础属性根据等级调整
         walkSpeed = 2f + (level - 1) * 0.2f;
         runSpeed = 5f + (level - 1) * 0.5f;
@@ -1597,6 +1603,10 @@ public class EnemyAIExtended : MonoBehaviour
         if (level >= 3)
         {
             attackCooldown = Mathf.Max(0.5f, attackCooldown - (level - 2) * 0.1f); // 更快的攻击速度
+        }
+        else
+        {
+            attackCooldown = 1.0f; // 默认值
         }
         
         // 调整避障参数
@@ -1792,5 +1802,5 @@ public class EnemyAIExtended : MonoBehaviour
 
     // 在文件开头添加一个调试变量
     [Header("调试参数")]
-    public bool debugStamina = true;  // 是否输出体力系统调试信息
+    [HideInInspector] public bool debugStamina = false;  // 是否调试体力系统
 }
